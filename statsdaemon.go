@@ -2,7 +2,7 @@ package main
 
 import (
 	"bytes"
-	"errors"
+//	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -73,7 +73,7 @@ func sanitizeBucket(bucket string) string {
 	for i := 0; i < len(bucket); i++ {
 		c := bucket[i]
 		switch {
-		case (c >= byte('a') && c <= byte('z')) || (c >= byte('A') && c <= byte('Z')) || (c >= byte('0') && c <= byte('9')) || c == byte('-') || c == byte('.') || c == byte('_'):
+		case (c >= byte('a') && c <= byte('z')) || (c >= byte('A') && c <= byte('Z')) || (c >= byte('0') && c <= byte('9')) || c == byte('-') || c == byte('.') || c == byte('_') || c == byte('='):
 			b[bl] = c
 			bl++
 		case c == byte(' '):
@@ -91,6 +91,7 @@ var (
 	serviceAddress    = flag.String("address", ":8125", "UDP service address")
 	tcpServiceAddress = flag.String("tcpaddr", "", "TCP service address, if set")
 	maxUdpPacketSize  = flag.Int64("max-udp-packet-size", 1472, "Maximum UDP packet size")
+	postFlushCmd	   = flag.String("post-flush-cmd", "stdout", "Command to run on each flush")
 	graphiteAddress   = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
 	flushInterval     = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
 	debug             = flag.Bool("debug", false, "print statistics sent to graphite")
@@ -199,15 +200,8 @@ func packetHandler(s *Packet) {
 func submit(deadline time.Time) error {
 	var buffer bytes.Buffer
 	var num int64
-
 	now := time.Now().Unix()
 
-	if *graphiteAddress == "-" {
-		return nil
-	}
-
-	client, err := net.Dial("tcp", *graphiteAddress)
-	if err != nil {
 		if *debug {
 			log.Printf("WARNING: resetting counters when in debug mode")
 			processCounters(&buffer, now)
@@ -215,16 +209,6 @@ func submit(deadline time.Time) error {
 			processTimers(&buffer, now, percentThreshold)
 			processSets(&buffer, now)
 		}
-		errmsg := fmt.Sprintf("dialing %s failed - %s", *graphiteAddress, err)
-		return errors.New(errmsg)
-	}
-	defer client.Close()
-
-	err = client.SetDeadline(deadline)
-	if err != nil {
-		return err
-	}
-
 	num += processCounters(&buffer, now)
 	num += processGauges(&buffer, now)
 	num += processTimers(&buffer, now, percentThreshold)
@@ -242,13 +226,18 @@ func submit(deadline time.Time) error {
 		}
 	}
 
-	_, err = client.Write(buffer.Bytes())
-	if err != nil {
-		errmsg := fmt.Sprintf("failed to write stats - %s", err)
-		return errors.New(errmsg)
+	if *postFlushCmd != "stdout" {
+		err := sendDataExtCmd(*postFlushCmd, &buffer)
+		if err != nil {
+			log.Printf(err.Error())
+		}
+			log.Printf("sent %d stats to external command", num)
+	} else {
+		if err := sendDataStdout(&buffer) ; err != nil {
+			log.Printf(err.Error())
+		}
+			log.Printf("wrote %d stats to stdout", num)
 	}
-
-	log.Printf("sent %d stats to %s", num, *graphiteAddress)
 
 	return nil
 }
@@ -257,14 +246,14 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
 	var num int64
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
-		fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
+		fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, value, now)
 		delete(counters, bucket)
 		countInactivity[bucket] = 0
 		num++
 	}
 	for bucket, purgeCount := range countInactivity {
 		if purgeCount > 0 {
-			fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
+			fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, 0, now)
 			num++
 		}
 		countInactivity[bucket] += 1
@@ -289,12 +278,12 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 
 		switch {
 		case hasChanged:
-			fmt.Fprintf(buffer, "%s %d %d\n", bucket, currentValue, now)
+			fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, currentValue, now)
 			lastGaugeValue[bucket] = currentValue
 			gauges[bucket] = math.MaxUint64
 			num++
 		case hasLastValue && !hasChanged && !*deleteGauges:
-			fmt.Fprintf(buffer, "%s %d %d\n", bucket, lastValue, now)
+			fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, lastValue, now)
 			num++
 		default:
 			continue
@@ -312,7 +301,7 @@ func processSets(buffer *bytes.Buffer, now int64) int64 {
 			uniqueSet[str] = true
 		}
 
-		fmt.Fprintf(buffer, "%s %d %d\n", bucket, len(uniqueSet), now)
+		fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, len(uniqueSet), now)
 		delete(sets, bucket)
 	}
 	return num
