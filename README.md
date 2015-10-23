@@ -15,7 +15,7 @@ Supports
 Note: Only integers are supported for metric values.
 
 Backend supported
-* Graphite (not working now)
+* Graphite 
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
 
 
