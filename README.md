@@ -35,9 +35,11 @@ Command Line Options
 ====================
 
 ```
-Usage of statsdaemon:
+Usage of ./statsdaemon:
   -address string
         UDP service address (default ":8125")
+  -backend-type string
+        Backend to use: graphite, external (default "external")
   -debug
         print statistics sent to graphite
   -delete-gauges
