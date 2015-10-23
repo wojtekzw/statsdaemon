@@ -91,6 +91,7 @@ var (
 	serviceAddress    = flag.String("address", ":8125", "UDP service address")
 	tcpServiceAddress = flag.String("tcpaddr", "", "TCP service address, if set")
 	maxUdpPacketSize  = flag.Int64("max-udp-packet-size", 1472, "Maximum UDP packet size")
+	backendType       = flag.String("backend-type", "external", "Backend to use: graphite, external")
 	postFlushCmd      = flag.String("post-flush-cmd", "stdout", "Command to run on each flush")
 	graphiteAddress   = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
 	flushInterval     = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
@@ -127,12 +128,12 @@ func monitor() {
 		select {
 		case sig := <-signalchan:
 			fmt.Printf("!! Caught signal %v... shutting down\n", sig)
-			if err := submit(time.Now().Add(period)); err != nil {
+			if err := submit(time.Now().Add(period), *backendType); err != nil {
 				log.Printf("ERROR: %s", err)
 			}
 			return
 		case <-ticker.C:
-			if err := submit(time.Now().Add(period)); err != nil {
+			if err := submit(time.Now().Add(period), *backendType); err != nil {
 				log.Printf("ERROR: %s", err)
 			}
 		case s := <-In:
@@ -205,7 +206,7 @@ func packetHandler(s *Packet) {
 	}
 }
 
-func submit(deadline time.Time) error {
+func submit(deadline time.Time, backend string) error {
 	var buffer bytes.Buffer
 	var num int64
 	now := time.Now().Unix()
@@ -216,12 +217,15 @@ func submit(deadline time.Time) error {
 		processGauges(&buffer, now)
 		processTimers(&buffer, now, percentThreshold)
 		processSets(&buffer, now)
+		processKeyValue(&buffer, now)
 	}
+
 	num += processCounters(&buffer, now)
 	num += processGauges(&buffer, now)
 	num += processTimers(&buffer, now, percentThreshold)
 	num += processSets(&buffer, now)
 	num += processKeyValue(&buffer, now)
+
 	if num == 0 {
 		return nil
 	}
@@ -234,18 +238,46 @@ func submit(deadline time.Time) error {
 			log.Printf("DEBUG: %s", line)
 		}
 	}
+	// send stats to backend
+	switch backend {
+	case "external":
+		if *postFlushCmd != "stdout" {
+			err := sendDataExtCmd(*postFlushCmd, &buffer)
+			if err != nil {
+				log.Printf(err.Error())
+			}
+			log.Printf("sent %d stats to external command", num)
+		} else {
+			if err := sendDataStdout(&buffer); err != nil {
+				log.Printf(err.Error())
+			}
+			log.Printf("wrote %d stats to stdout", num)
+		}
 
-	if *postFlushCmd != "stdout" {
-		err := sendDataExtCmd(*postFlushCmd, &buffer)
+	case "graphite":
+		if *graphiteAddress == "-" {
+			fmt.Printf("Error: Graphite backend selected and no graphite server address\n")
+			os.Exit(1)
+		}
+		client, err := net.Dial("tcp", *graphiteAddress)
 		if err != nil {
-			log.Printf(err.Error())
+			return fmt.Errorf("dialing %s failed - %s", *graphiteAddress, err)
 		}
-		log.Printf("sent %d stats to external command", num)
-	} else {
-		if err := sendDataStdout(&buffer); err != nil {
-			log.Printf(err.Error())
+		defer client.Close()
+
+		err = client.SetDeadline(deadline)
+		if err != nil {
+			return err
 		}
-		log.Printf("wrote %d stats to stdout", num)
+		_, err = client.Write(buffer.Bytes())
+		if err != nil {
+			return fmt.Errorf("failed to write stats to graphite: %s", err)
+		}
+		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
+
+	default:
+		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...", backend))
+		os.Exit(1)
 	}
 
 	return nil
@@ -627,12 +659,30 @@ func tcpListener() {
 	}
 }
 
+func validateFlags() error {
+	// FIXME  check all params/flags
+	if *backendType != "external" && *backendType != "graphite" {
+		return fmt.Errorf("Parameter error: Invalid backend-type: %s\n", *backendType)
+	}
+
+	if *graphiteAddress == "-" && *backendType == "graphite" {
+		return fmt.Errorf("Parameter error: Graphite backend selected and no graphite server address\n")
+	}
+	return nil
+}
+
 func main() {
 	flag.Parse()
+	err := validateFlags()
+	if err != nil {
+		fmt.Printf("\n%s\n", err)
+		flag.Usage()
+		os.Exit(1)
+	}
 
 	if *showVersion {
 		fmt.Printf("statsdaemon v%s (built w/%s)\n", VERSION, runtime.Version())
-		return
+		os.Exit(0)
 	}
 
 	signalchan = make(chan os.Signal, 1)
