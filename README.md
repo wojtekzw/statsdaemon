@@ -1,8 +1,7 @@
 statsdaemon
 ==========
 
-Port of Etsy's statsd (https://github.com/etsy/statsd), written in Go (based on
-  [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) )
+Port of Etsy's statsd (https://github.com/etsy/statsd), written in Go (originally based on amir/gographite).
 
 Supports
 
@@ -24,7 +23,7 @@ Installing
 ==========
 ### Building from Source
 ```
-git clone https://github.com/wojtekzw/statsdaemon
+git clone https://github.com/szaydel/statsdaemon
 cd statsdaemon
 go get github.com/bmizerany/assert #for tests
 go build
