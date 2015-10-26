@@ -18,6 +18,7 @@ Note: Only integers are supported for metric values.
 Backend supported
 * Graphite
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
+* OpenTSDB
 
 
 
