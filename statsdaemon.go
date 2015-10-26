@@ -91,9 +91,10 @@ var (
 	serviceAddress    = flag.String("address", ":8125", "UDP service address")
 	tcpServiceAddress = flag.String("tcpaddr", "", "TCP service address, if set")
 	maxUdpPacketSize  = flag.Int64("max-udp-packet-size", 1472, "Maximum UDP packet size")
-	backendType       = flag.String("backend-type", "external", "Backend to use: graphite, external")
+	backendType       = flag.String("backend-type", "external", "Backend to use: graphite, opentsdb, external")
 	postFlushCmd      = flag.String("post-flush-cmd", "stdout", "Command to run on each flush")
 	graphiteAddress   = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
+	openTSDBAddress   = flag.String("opentsdb", "-", "openTSDB service address (or - to disable)")
 	flushInterval     = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
 	debug             = flag.Bool("debug", false, "print statistics sent to backend")
 	showVersion       = flag.Bool("version", false, "print version string")
@@ -251,7 +252,12 @@ func submit(deadline time.Time, backend string) error {
 			if err := sendDataStdout(&buffer); err != nil {
 				log.Printf(err.Error())
 			}
+			a2 := bytes.Split(buffer.Bytes(), []byte("\n"))
+			a3 := strings.Split(buffer.String(), "\n")
+			num2 := len(a2)
+			num3 := len(a3)
 			log.Printf("wrote %d stats to stdout", num)
+			log.Printf("NUM=%d, NUM2=%d(%v), NUM3=%d(%v)", num, num2, a2, num3, a3)
 		}
 
 	case "graphite":
@@ -271,6 +277,12 @@ func submit(deadline time.Time, backend string) error {
 			return fmt.Errorf("failed to write stats to graphite: %s", err)
 		}
 		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
+
+	case "opentsdb":
+		err := openTSDB(*openTSDBAddress, &buffer, *debug)
+		if err != nil {
+			log.Printf("Error writing to OpenTSDB: %v", err)
+		}
 
 	default:
 		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...", backend))
@@ -587,7 +599,7 @@ func parseLine(line []byte) *Packet {
 	case "ms":
 		value, err = strconv.ParseUint(string(val), 10, 64)
 		if err != nil {
-			log.Printf("ERROR: failed to ParseUint %s - %s", string(val), err)
+			log.Printf("ERROR: (Gauge) failed to ParseUint %s - %s", string(val), err)
 			return nil
 		}
 	case "kv":
@@ -658,12 +670,16 @@ func tcpListener() {
 
 func validateFlags() error {
 	// FIXME  check all params/flags
-	if *backendType != "external" && *backendType != "graphite" {
+	if *backendType != "external" && *backendType != "graphite" && *backendType != "opentsdb" {
 		return fmt.Errorf("Parameter error: Invalid backend-type: %s\n", *backendType)
 	}
 
 	if *graphiteAddress == "-" && *backendType == "graphite" {
 		return fmt.Errorf("Parameter error: Graphite backend selected and no graphite server address\n")
+	}
+
+	if *openTSDBAddress == "-" && *backendType == "opentsdb" {
+		return fmt.Errorf("Parameter error: OpenTSDB backend selected and no OpenTSDB server address\n")
 	}
 	return nil
 }
