@@ -95,7 +95,7 @@ var (
 	postFlushCmd      = flag.String("post-flush-cmd", "stdout", "Command to run on each flush")
 	graphiteAddress   = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
 	flushInterval     = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
-	debug             = flag.Bool("debug", false, "print statistics sent to graphite")
+	debug             = flag.Bool("debug", false, "print statistics sent to backend")
 	showVersion       = flag.Bool("version", false, "print version string")
 	deleteGauges      = flag.Bool("delete-gauges", true, "don't send values to graphite for inactive gauges, as opposed to sending the previous value")
 	persistCountKeys  = flag.Int64("persist-count-keys", 60, "number of flush-intervals to persist count keys")
@@ -255,10 +255,7 @@ func submit(deadline time.Time, backend string) error {
 		}
 
 	case "graphite":
-		if *graphiteAddress == "-" {
-			fmt.Printf("Error: Graphite backend selected and no graphite server address\n")
-			os.Exit(1)
-		}
+
 		client, err := net.Dial("tcp", *graphiteAddress)
 		if err != nil {
 			return fmt.Errorf("dialing %s failed - %s", *graphiteAddress, err)
@@ -287,14 +284,14 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
 	var num int64
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
-		fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, value, now)
+		fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
 		delete(counters, bucket)
 		countInactivity[bucket] = 0
 		num++
 	}
 	for bucket, purgeCount := range countInactivity {
 		if purgeCount > 0 {
-			fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, 0, now)
+			fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
 			num++
 		}
 		countInactivity[bucket] += 1
@@ -319,12 +316,12 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 
 		switch {
 		case hasChanged:
-			fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, currentValue, now)
+			fmt.Fprintf(buffer, "%s %d %d\n", bucket, currentValue, now)
 			lastGaugeValue[bucket] = currentValue
 			gauges[bucket] = math.MaxUint64
 			num++
 		case hasLastValue && !hasChanged && !*deleteGauges:
-			fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, lastValue, now)
+			fmt.Fprintf(buffer, "%s %d %d\n", bucket, lastValue, now)
 			num++
 		default:
 			continue
@@ -342,7 +339,7 @@ func processSets(buffer *bytes.Buffer, now int64) int64 {
 			uniqueSet[str] = true
 		}
 
-		fmt.Fprintf(buffer, "%s,%d,%d\n", bucket, len(uniqueSet), now)
+		fmt.Fprintf(buffer, "%s %d %d\n", bucket, len(uniqueSet), now)
 		delete(sets, bucket)
 	}
 	return num
@@ -360,7 +357,7 @@ func processKeyValue(buffer *bytes.Buffer, now int64) int64 {
 				continue
 			}
 			uniqueKeyVal[value] = true
-			fmt.Fprintf(buffer, "%s,%s,%d\n", bucket, value, now)
+			fmt.Fprintf(buffer, "%s %s %d\n", bucket, value, now)
 		}
 		delete(keys, bucket)
 	}

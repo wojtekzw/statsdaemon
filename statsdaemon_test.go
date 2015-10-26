@@ -408,7 +408,7 @@ func TestProcessCounters(t *testing.T) {
 
 	num := processCounters(&buffer, now)
 	assert.Equal(t, num, int64(1))
-	assert.Equal(t, buffer.String(), "gorets,123,1418052649\n")
+	assert.Equal(t, buffer.String(), "gorets 123 1418052649\n")
 
 	// run processCounters() enough times to make sure it purges items
 	for i := 0; i < int(*persistCountKeys)+10; i++ {
@@ -418,8 +418,8 @@ func TestProcessCounters(t *testing.T) {
 
 	// expect two more lines - the good one and an empty one at the end
 	assert.Equal(t, len(lines), int(*persistCountKeys+2))
-	assert.Equal(t, string(lines[0]), "gorets,123,1418052649")
-	assert.Equal(t, string(lines[*persistCountKeys]), "gorets,0,1418052649")
+	assert.Equal(t, string(lines[0]), "gorets 123 1418052649")
+	assert.Equal(t, string(lines[*persistCountKeys]), "gorets 0 1418052649")
 }
 
 func TestProcessTimers(t *testing.T) {
@@ -464,7 +464,7 @@ func TestProcessGauges(t *testing.T) {
 
 	gauges["gaugor"] = math.MaxUint64
 	num = processGauges(&buffer, now)
-	assert.Equal(t, buffer.String(), "gaugor,12345,1418052649\ngaugor,12345,1418052649\n")
+	assert.Equal(t, buffer.String(), "gaugor 12345 1418052649\ngaugor 12345 1418052649\n")
 	assert.Equal(t, num, int64(1))
 }
 
@@ -488,7 +488,7 @@ func TestProcessDeleteGauges(t *testing.T) {
 
 	gauges["gaugordelete"] = math.MaxUint64
 	num = processGauges(&buffer, now)
-	assert.Equal(t, buffer.String(), "gaugordelete,12345,1418052649\n")
+	assert.Equal(t, buffer.String(), "gaugordelete 12345 1418052649\n")
 	assert.Equal(t, num, int64(0))
 }
 
@@ -503,14 +503,14 @@ func TestProcessSets(t *testing.T) {
 	sets["uniques"] = []string{"123", "234", "345"}
 	num := processSets(&buffer, now)
 	assert.Equal(t, num, int64(1))
-	assert.Equal(t, buffer.String(), "uniques,3,1418052649\n")
+	assert.Equal(t, buffer.String(), "uniques 3 1418052649\n")
 
 	// one value is repeated
 	buffer.Reset()
 	sets["uniques"] = []string{"123", "234", "234"}
 	num = processSets(&buffer, now)
 	assert.Equal(t, num, int64(1))
-	assert.Equal(t, buffer.String(), "uniques,2,1418052649\n")
+	assert.Equal(t, buffer.String(), "uniques 2 1418052649\n")
 
 	// make sure sets are purged
 	num = processSets(&buffer, now)
