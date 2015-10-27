@@ -22,15 +22,20 @@ import (
 const (
 	MAX_UNPROCESSED_PACKETS = 1000
 	TCP_READ_SIZE           = 4096
+	SEP_CHAR                = "^"
+	SEP_SPLIT               = "." + SEP_CHAR
 )
 
 var signalchan chan os.Signal
 
 type Packet struct {
-	Bucket   string
-	Value    interface{}
-	Modifier string
-	Sampling float32
+	Bucket         string
+	Value          interface{}
+	SrcBucket      string
+	GraphiteBucket string
+	Tags           map[string]string
+	Modifier       string
+	Sampling       float32
 }
 
 type GaugeData struct {
@@ -120,6 +125,7 @@ var (
 	countInactivity = make(map[string]int64)
 	sets            = make(map[string][]string)
 	keys            = make(map[string][]string)
+	tags            = make(map[string]string)
 )
 
 func monitor() {
@@ -130,12 +136,12 @@ func monitor() {
 		case sig := <-signalchan:
 			fmt.Printf("!! Caught signal %v... shutting down\n", sig)
 			if err := submit(time.Now().Add(period), *backendType); err != nil {
-				log.Printf("ERROR: %s", err)
+				log.Printf("ERROR: submit %s", err)
 			}
 			return
 		case <-ticker.C:
 			if err := submit(time.Now().Add(period), *backendType); err != nil {
-				log.Printf("ERROR: %s", err)
+				log.Printf("ERROR: submit %s", err)
 			}
 		case s := <-In:
 			packetHandler(s)
@@ -152,7 +158,11 @@ func packetHandler(s *Packet) {
 		counters[*receiveCounter] += 1
 	}
 
+	// global var tags
+	tags = s.Tags
+
 	switch s.Modifier {
+	// timer
 	case "ms":
 		_, ok := timers[s.Bucket]
 		if !ok {
@@ -160,6 +170,7 @@ func packetHandler(s *Packet) {
 			timers[s.Bucket] = t
 		}
 		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+		// gauge
 	case "g":
 		gaugeValue, _ := gauges[s.Bucket]
 
@@ -185,19 +196,21 @@ func packetHandler(s *Packet) {
 		}
 
 		gauges[s.Bucket] = gaugeValue
+		// counter
 	case "c":
 		_, ok := counters[s.Bucket]
 		if !ok {
 			counters[s.Bucket] = 0
 		}
-		log.Printf("%v\n", counters)
 		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
+		// set
 	case "s":
 		_, ok := sets[s.Bucket]
 		if !ok {
 			sets[s.Bucket] = make([]string, 0)
 		}
 		sets[s.Bucket] = append(sets[s.Bucket], s.Value.(string))
+		// key/value
 	case "kv":
 		_, ok := keys[s.Bucket]
 		if !ok {
@@ -252,6 +265,8 @@ func submit(deadline time.Time, backend string) error {
 			if err := sendDataStdout(&buffer); err != nil {
 				log.Printf(err.Error())
 			}
+
+			// FIXME - tests
 			a2 := bytes.Split(buffer.Bytes(), []byte("\n"))
 			a3 := strings.Split(buffer.String(), "\n")
 			num2 := len(a2)
@@ -279,7 +294,7 @@ func submit(deadline time.Time, backend string) error {
 		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
 
 	case "opentsdb":
-		err := openTSDB(*openTSDBAddress, &buffer, *debug)
+		err := openTSDB(*openTSDBAddress, &buffer, tags, *debug)
 		if err != nil {
 			log.Printf("Error writing to OpenTSDB: %v", err)
 		}
@@ -519,6 +534,10 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 }
 
 func parseLine(line []byte) *Packet {
+
+	tags := make(map[string]string)
+
+	log.Printf("DEBUG: Input line: %s", string(line))
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
 		logParseFail(line)
@@ -599,7 +618,7 @@ func parseLine(line []byte) *Packet {
 	case "ms":
 		value, err = strconv.ParseUint(string(val), 10, 64)
 		if err != nil {
-			log.Printf("ERROR: (Gauge) failed to ParseUint %s - %s", string(val), err)
+			log.Printf("ERROR(Timer):failed to ParseUint %s - %s", string(val), err)
 			return nil
 		}
 	case "kv":
@@ -608,12 +627,28 @@ func parseLine(line []byte) *Packet {
 		log.Printf("ERROR: unrecognized type code %q", typeCode)
 		return nil
 	}
-
+	// parse tags from bucket name
+	tagsSlice := strings.Split(string(name), SEP_SPLIT)
+	for _, e := range tagsSlice[1:] {
+		tagAndVal := strings.Split(e, "=")
+		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
+			log.Printf("Error: invalid tag format %v", e)
+		} else {
+			tags[tagAndVal[0]] = tagAndVal[1]
+		}
+	}
+	// bucket is set to a name without tags (tagsSlice[0])
+	// graphiteBucket is set to a name striped out of not allowed chars
+	bucket := sanitizeBucket(*prefix + tagsSlice[0] + *postfix)
+	graphiteBucket := sanitizeBucket(*prefix + string(name) + *postfix)
 	return &Packet{
-		Bucket:   sanitizeBucket(*prefix + string(name) + *postfix),
-		Value:    value,
-		Modifier: typeCode,
-		Sampling: sampling,
+		Bucket:         bucket,
+		Value:          value,
+		SrcBucket:      string(name),
+		GraphiteBucket: graphiteBucket,
+		Tags:           tags,
+		Modifier:       typeCode,
+		Sampling:       sampling,
 	}
 }
 
