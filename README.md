@@ -4,6 +4,7 @@ statsdaemon
 Port of Etsy's statsd server (https://github.com/etsy/statsd), written in Go (based on
   [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) and changes from
   [alexclear/statsdaemon](https://github.com/alexclear/statsdaemon) and others)
+  with many enhacements (e.g. floats in timers and gauges, sets, key/values, absolute counters, many different backends)
 
 Supports
 
