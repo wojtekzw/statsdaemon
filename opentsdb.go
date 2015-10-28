@@ -12,7 +12,8 @@ import (
 	"github.com/mapmyfitness/go-opentsdb/tsdb"
 )
 
-func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]string, debug bool) error {
+func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]map[string]string, debug bool) error {
+
 	if openTSDBAddress != "-" {
 		datapoints := []tsdb.DataPoint{}
 		TSDB := tsdb.TSDB{}
@@ -29,6 +30,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]str
 		server.Host = serverAdress[0]
 		server.Port = uint(port)
 		metrics := strings.Split(buffer.String(), "\n")
+		metrics = removeEmptyLines(metrics)
 		num := len(metrics)
 		for _, mtr := range metrics {
 			data := strings.Split(mtr, " ")
@@ -40,80 +42,56 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]str
 				datapoint := tsdb.DataPoint{}
 
 				// parse value
-				// FIXME - not working with k/v
+				// K/V values NOT allowed for OpenTSDB as metric
+				// TODO - consider setting them as tags
 				val, err := strconv.ParseFloat(data[1], 64)
 				if err != nil {
-					return err
+					// continue on error in one metric
+					log.Printf("Format error: Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
+					continue
 				}
 				value.Set(val)
 
 				// parse timestamp
 				err = timestamp.Parse(data[2])
 				if err != nil {
-					return err
+					log.Printf("Format error: Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
+					continue
 				}
-				metricAndTags := strings.SplitN(data[0], SEP_SPLIT, 1)
-				fmt.Printf("DEBUG: data: (%v), metricAndTags: (%v)\n", data, metricAndTags)
 
-				for k, v := range mtags[metricAndTags[0]] {
+				// parse metric/bucket
+				metricName := data[0]
+				err = metric.Set(metricName)
+				if err != nil {
+					log.Printf("Format error: Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
+					continue
+				}
+
+				for k, v := range mtags[metricName] {
 					tags.Set(k, v)
 				}
 
-				if metricAndTags[0] != data[0] {
-					fmt.Printf("DEBUG (1): metric: %v\n", metricAndTags[0])
-					err = metric.Set(metricAndTags[0])
-					if err != nil {
-						return err
-					}
-					//
-					// for _, tagVal := range strings.Split(metricAndTags[1], SEP_SPLIT) {
-					// 	arrTagVal := strings.Split(tagVal, "=")
-					// 	fmt.Printf("DEBUG: tagval: %v\n", arrTagVal)
-					// 	if len(arrTagVal) != 2 {
-					// 		errmsg := fmt.Sprintf("Error: Incorrect metric format %v", arrTagVal)
-					// 		return errors.New(errmsg)
-					// 	}
-					// 	tags.Set(arrTagVal[0], arrTagVal[1])
-					// }
-
-				} else {
-					fmt.Printf("DEBUG (2): metric: %v\n", metricAndTags)
-
-					metricAndTags := strings.Split(data[0], "._t_")
-					if len(metricAndTags) != 2 {
-						errmsg := fmt.Sprintf("Error: Incorrect metric format (._t_) %v", metricAndTags)
-						return errors.New(errmsg)
-					}
-					err = metric.Set(metricAndTags[0])
-					if err != nil {
-						return err
-					}
-					arrTagVal := strings.Split(metricAndTags[1], ".")
-					if len(arrTagVal) != 2 {
-						errmsg := fmt.Sprintf("Error: Incorrect metric format (.) %v", arrTagVal)
-						return errors.New(errmsg)
-					}
-					tags.Set(arrTagVal[0], arrTagVal[1])
-
-					fmt.Printf("DEBUG: Tags (%v)", tags)
-
-					datapoint.Value = &value
-					datapoint.Metric = &metric
-					datapoint.Tags = &tags
-					datapoint.Timestamp = &timestamp
-					datapoints = append(datapoints, datapoint)
-				}
-
+				datapoint.Value = &value
+				datapoint.Metric = &metric
+				datapoint.Tags = &tags
+				datapoint.Timestamp = &timestamp
+				datapoints = append(datapoints, datapoint)
+			} else {
+				log.Printf("Format error: Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
 			}
-
-			TSDB.Servers = append(TSDB.Servers, server)
-			_, err = TSDB.Put(datapoints)
-			if err != nil {
-				return err
-			}
-			log.Printf("sent %d stats to %s", num, openTSDBAddress)
 
 		}
+
+		TSDB.Servers = append(TSDB.Servers, server)
+		_, err = TSDB.Put(datapoints)
+		if err != nil {
+			return err
+		}
+		log.Printf("sent %d stats to %s", num, openTSDBAddress)
+
+		return nil
+
 	}
+
 	return nil
 }

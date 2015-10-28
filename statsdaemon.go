@@ -125,7 +125,7 @@ var (
 	countInactivity = make(map[string]int64)
 	sets            = make(map[string][]string)
 	keys            = make(map[string][]string)
-	tags            = make(map[string]string)
+	tags            = make(map[string]map[string]string)
 )
 
 func monitor() {
@@ -149,6 +149,8 @@ func monitor() {
 	}
 }
 
+// packetHandler - process parsed packet and set data in
+// global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
 	if *receiveCounter != "" {
 		v, ok := counters[*receiveCounter]
@@ -159,7 +161,7 @@ func packetHandler(s *Packet) {
 	}
 
 	// global var tags
-	tags = s.Tags
+	tags[s.Bucket] = s.Tags
 
 	switch s.Modifier {
 	// timer
@@ -255,6 +257,8 @@ func submit(deadline time.Time, backend string) error {
 	// send stats to backend
 	switch backend {
 	case "external":
+		log.Printf("DEBUG: external [%s]\n", buffer.String())
+
 		if *postFlushCmd != "stdout" {
 			err := sendDataExtCmd(*postFlushCmd, &buffer)
 			if err != nil {
@@ -265,17 +269,10 @@ func submit(deadline time.Time, backend string) error {
 			if err := sendDataStdout(&buffer); err != nil {
 				log.Printf(err.Error())
 			}
-
-			// FIXME - tests
-			a2 := bytes.Split(buffer.Bytes(), []byte("\n"))
-			a3 := strings.Split(buffer.String(), "\n")
-			num2 := len(a2)
-			num3 := len(a3)
-			log.Printf("wrote %d stats to stdout", num)
-			log.Printf("NUM=%d, NUM2=%d(%v), NUM3=%d(%v)", num, num2, a2, num3, a3)
 		}
 
 	case "graphite":
+		log.Printf("DEBUG: graphite [%s]\n", buffer.String())
 
 		client, err := net.Dial("tcp", *graphiteAddress)
 		if err != nil {
@@ -287,6 +284,7 @@ func submit(deadline time.Time, backend string) error {
 		if err != nil {
 			return err
 		}
+
 		_, err = client.Write(buffer.Bytes())
 		if err != nil {
 			return fmt.Errorf("failed to write stats to graphite: %s", err)
@@ -294,13 +292,17 @@ func submit(deadline time.Time, backend string) error {
 		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
 
 	case "opentsdb":
+		if *debug {
+			log.Printf("DEBUG: opentsdb [%s]\n", buffer.String())
+		}
+
 		err := openTSDB(*openTSDBAddress, &buffer, tags, *debug)
 		if err != nil {
-			log.Printf("Error writing to OpenTSDB: %v", err)
+			log.Printf("Error writing to OpenTSDB: %v\n", err)
 		}
 
 	default:
-		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...", backend))
+		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...\n", backend))
 		os.Exit(1)
 	}
 
@@ -717,6 +719,17 @@ func validateFlags() error {
 		return fmt.Errorf("Parameter error: OpenTSDB backend selected and no OpenTSDB server address\n")
 	}
 	return nil
+}
+
+func removeEmptyLines(lines []string) []string {
+	var outLines []string
+
+	for _, v := range lines {
+		if len(v) > 0 {
+			outLines = append(outLines, v)
+		}
+	}
+	return outLines
 }
 
 func main() {

@@ -21,6 +21,13 @@ var commonPercentiles = Percentiles{
 	},
 }
 
+func TestRemoveEmptyLines(t *testing.T) {
+	lines := []string{"sth1", "", "sth2", ""}
+	linesOut := removeEmptyLines(lines)
+	assert.Equal(t, len(linesOut), 2)
+	assert.Equal(t, linesOut, []string{"sth1", "sth2"})
+}
+
 func TestParseLineGauge(t *testing.T) {
 	d := []byte("gaugor:333|g")
 	packet := parseLine(d)
