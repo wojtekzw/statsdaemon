@@ -99,7 +99,7 @@ var (
 	backendType       = flag.String("backend-type", "external", "Backend to use: graphite, opentsdb, external")
 	postFlushCmd      = flag.String("post-flush-cmd", "stdout", "Command to run on each flush")
 	graphiteAddress   = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
-	openTSDBAddress   = flag.String("opentsdb", "-", "openTSDB service address (or - to disable)")
+	openTSDBAddress   = flag.String("opentsdb", "127.0.0.1:4242", "openTSDB service address (or - to disable)")
 	flushInterval     = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
 	debug             = flag.Bool("debug", false, "print statistics sent to backend")
 	showVersion       = flag.Bool("version", false, "print version string")
@@ -121,6 +121,7 @@ var (
 	counters        = make(map[string]int64)
 	gauges          = make(map[string]uint64)
 	lastGaugeValue  = make(map[string]uint64)
+	lastGaugeTags   = make(map[string]map[string]string)
 	timers          = make(map[string]Uint64Slice)
 	countInactivity = make(map[string]int64)
 	sets            = make(map[string][]string)
@@ -227,15 +228,6 @@ func submit(deadline time.Time, backend string) error {
 	var num int64
 	now := time.Now().Unix()
 
-	if *debug {
-		log.Printf("WARNING: resetting counters when in debug mode")
-		processCounters(&buffer, now)
-		processGauges(&buffer, now)
-		processTimers(&buffer, now, percentThreshold)
-		processSets(&buffer, now)
-		processKeyValue(&buffer, now)
-	}
-
 	num += processCounters(&buffer, now)
 	num += processGauges(&buffer, now)
 	num += processTimers(&buffer, now, percentThreshold)
@@ -257,7 +249,7 @@ func submit(deadline time.Time, backend string) error {
 	// send stats to backend
 	switch backend {
 	case "external":
-		log.Printf("DEBUG: external [%s]\n", buffer.String())
+		log.Printf("DEBUG: external [%s]\n", fixNewLine(buffer.String()))
 
 		if *postFlushCmd != "stdout" {
 			err := sendDataExtCmd(*postFlushCmd, &buffer)
@@ -272,7 +264,7 @@ func submit(deadline time.Time, backend string) error {
 		}
 
 	case "graphite":
-		log.Printf("DEBUG: graphite [%s]\n", buffer.String())
+		log.Printf("DEBUG: graphite [%s]\n", fixNewLine(buffer.String()))
 
 		client, err := net.Dial("tcp", *graphiteAddress)
 		if err != nil {
@@ -293,7 +285,7 @@ func submit(deadline time.Time, backend string) error {
 
 	case "opentsdb":
 		if *debug {
-			log.Printf("DEBUG: opentsdb [%s]\n", buffer.String())
+			log.Printf("DEBUG: opentsdb [%s]\n", fixNewLine(buffer.String()))
 		}
 
 		err := openTSDB(*openTSDBAddress, &buffer, tags, *debug)
@@ -315,6 +307,7 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
 	for bucket, value := range counters {
 		fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
 		delete(counters, bucket)
+		// set counter as inactive
 		countInactivity[bucket] = 0
 		num++
 	}
@@ -324,8 +317,11 @@ func processCounters(buffer *bytes.Buffer, now int64) int64 {
 			num++
 		}
 		countInactivity[bucket] += 1
+		// remove counter from sending '0'
 		if countInactivity[bucket] > *persistCountKeys {
 			delete(countInactivity, bucket)
+			// remove tags associated with bucket
+			delete(tags, bucket)
 		}
 	}
 	return num
@@ -337,6 +333,8 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 	for bucket, gauge := range gauges {
 		currentValue := gauge
 		lastValue, hasLastValue := lastGaugeValue[bucket]
+		// not used
+		// lastTags := lastGaugeTags[bucket]
 		var hasChanged bool
 
 		if gauge != math.MaxUint64 {
@@ -346,8 +344,11 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 		switch {
 		case hasChanged:
 			fmt.Fprintf(buffer, "%s %d %d\n", bucket, currentValue, now)
+			// FIXME Memoryleak - never free lastGaugeValue & lastGaugeTags when a lot of unique bucket are used
 			lastGaugeValue[bucket] = currentValue
+			lastGaugeTags[bucket] = tags[bucket]
 			gauges[bucket] = math.MaxUint64
+			delete(tags, bucket)
 			num++
 		case hasLastValue && !hasChanged && !*deleteGauges:
 			fmt.Fprintf(buffer, "%s %d %d\n", bucket, lastValue, now)
@@ -370,6 +371,7 @@ func processSets(buffer *bytes.Buffer, now int64) int64 {
 
 		fmt.Fprintf(buffer, "%s %d %d\n", bucket, len(uniqueSet), now)
 		delete(sets, bucket)
+		delete(tags, bucket)
 	}
 	return num
 }
@@ -389,6 +391,7 @@ func processKeyValue(buffer *bytes.Buffer, now int64) int64 {
 			fmt.Fprintf(buffer, "%s %s %d\n", bucket, value, now)
 		}
 		delete(keys, bucket)
+		delete(tags, bucket)
 	}
 	return num
 }
@@ -446,6 +449,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 		fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, *postfix, count, now)
 
 		delete(timers, bucket)
+		delete(tags, bucket)
 	}
 	return num
 }
@@ -539,7 +543,10 @@ func parseLine(line []byte) *Packet {
 
 	tags := make(map[string]string)
 
-	log.Printf("DEBUG: Input line: %s", string(line))
+	if *debug {
+		log.Printf("DEBUG: Input packet line: %s", string(line))
+	}
+
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
 		logParseFail(line)
@@ -570,6 +577,7 @@ func parseLine(line []byte) *Packet {
 		logParseFail(line)
 		return nil
 	}
+	// raw bucket name from line
 	name := string(split[0])
 	val := split[1]
 	if len(val) == 0 {
@@ -578,8 +586,9 @@ func parseLine(line []byte) *Packet {
 	}
 
 	var (
-		err   error
-		value interface{}
+		err    error
+		value  interface{}
+		bucket string
 	)
 
 	switch typeCode {
@@ -630,18 +639,11 @@ func parseLine(line []byte) *Packet {
 		return nil
 	}
 	// parse tags from bucket name
-	tagsSlice := strings.Split(string(name), SEP_SPLIT)
-	for _, e := range tagsSlice[1:] {
-		tagAndVal := strings.Split(e, "=")
-		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			log.Printf("Error: invalid tag format %v", e)
-		} else {
-			tags[tagAndVal[0]] = tagAndVal[1]
-		}
-	}
+	bucket, tags, err = parseBucketAndTags(string(name))
+
 	// bucket is set to a name without tags (tagsSlice[0])
 	// graphiteBucket is set to a name striped out of not allowed chars
-	bucket := sanitizeBucket(*prefix + tagsSlice[0] + *postfix)
+	bucket = sanitizeBucket(*prefix + bucket + *postfix)
 	graphiteBucket := sanitizeBucket(*prefix + string(name) + *postfix)
 	return &Packet{
 		Bucket:         bucket,
@@ -654,6 +656,27 @@ func parseLine(line []byte) *Packet {
 	}
 }
 
+func parseBucketAndTags(name string) (string, map[string]string, error) {
+	// split name in format
+	// measure.name.^tag1=val1.^tag2=val2
+	// this function can be extended for new "combined" formats
+
+	tags := make(map[string]string)
+
+	tagsSlice := strings.Split(string(name), SEP_SPLIT)
+	if len(tagsSlice) == 0 || tagsSlice[0] == "" {
+		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
+	}
+	for _, e := range tagsSlice[1:] {
+		tagAndVal := strings.Split(e, "=")
+		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
+			log.Printf("Error: invalid tag format %v", e)
+		} else {
+			tags[tagAndVal[0]] = tagAndVal[1]
+		}
+	}
+	return tagsSlice[0], tags, nil
+}
 func logParseFail(line []byte) {
 	if *debug {
 		log.Printf("ERROR: failed to parse line: %q\n", string(line))
@@ -731,6 +754,55 @@ func removeEmptyLines(lines []string) []string {
 	}
 	return outLines
 }
+
+func fixNewLine(s string) string {
+	return strings.Replace(s, "\n", "\\n", -1)
+}
+
+func tagsToString(t map[string]string) string {
+	out := ""
+	keys := sort.StringSlice{}
+	for k := range t {
+		keys = append(keys, k)
+	}
+	keys.Sort()
+
+	for _, k := range keys {
+		out = out + fmt.Sprintf(", %s=%s", k, t[k])
+	}
+	return out
+}
+
+// func getBytes(key interface{}) (bytes.Buffer, error) {
+// 	var buf = bytes.Buffer{}
+//
+// 	enc := gob.NewEncoder(&buf)
+// 	err := enc.Encode(key)
+// 	if err != nil {
+// 		return buf, err
+// 	}
+// 	return buf, nil
+// }
+
+// func formatOutLine(buffer bytes.Buffer, allTags map[string]map[string]string) bytes.Buffer {
+// 	out := ""
+// 	metrics := strings.Split(buffer.String(), "\n")
+// 	metrics = removeEmptyLines(metrics)
+// 	for _, mtr := range metrics {
+// 		data := strings.Split(mtr, " ")
+// 		out = mtr
+// 		if len(data) == 3 {
+// 			out = out + " " + tagsToString(allTags[data[0]])
+// 		}
+// 		out = out + "\n"
+// 	}
+// 	fmt.Printf("DEBUG: TAGS %s", out)
+// 	buf, err := getBytes(out)
+// 	if err != nil {
+// 		return bytes.Buffer{}
+// 	}
+// 	return buf
+// }
 
 func main() {
 	flag.Parse()
