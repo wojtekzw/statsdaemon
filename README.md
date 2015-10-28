@@ -24,9 +24,10 @@ Backend supported
 Tag are supported as encoded in bucket name eg:
 cpu.load.idle.^host=dev.^env=prod.^zone=west
 It means:
+```
   gauge name: cpu.load.idle
   tags: host = dev, env = prod, zone = west
-
+```
 Tags encoding pattern can be changed/enchanced in function `parseBucketAndTags(name string) (string, map[string]string, error)`
 
 Installing
