@@ -25,6 +25,7 @@ Backend supported
 Tag are supported as encoded in bucket name eg:
 cpu.load.idle.^host=dev.^env=prod.^zone=west
 
+It means:
   gauge name: cpu.load.idle
   tags: host = dev, env = prod, zone = west
 ```
