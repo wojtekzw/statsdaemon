@@ -413,13 +413,13 @@ func TestProcessCounters(t *testing.T) {
 
 	counters["gorets"] = int64(123)
 
-	num := processCounters(&buffer, now)
+	num := processCounters(&buffer, now, true)
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "gorets 123 1418052649\n")
 
 	// run processCounters() enough times to make sure it purges items
 	for i := 0; i < int(*persistCountKeys)+10; i++ {
-		num = processCounters(&buffer, now)
+		num = processCounters(&buffer, now, true)
 	}
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -671,7 +671,7 @@ func BenchmarkManyDifferentSensors(t *testing.B) {
 	now := time.Now().Unix()
 	t.ResetTimer()
 	processTimers(&buff, now, commonPercentiles)
-	processCounters(&buff, now)
+	processCounters(&buff, now, true)
 	processGauges(&buff, now)
 }
 
@@ -721,7 +721,7 @@ func BenchmarkOneTimerWith10Points(t *testing.B) {
 
 }
 
-func Benchmark100CounterWith1000IncrementsEach(t *testing.B) {
+func Benchmark100CountersWith1000IncrementsEach(t *testing.B) {
 	r := rand.New(rand.NewSource(438))
 
 	for i := 0; i < 100; i++ {
@@ -736,7 +736,7 @@ func Benchmark100CounterWith1000IncrementsEach(t *testing.B) {
 	t.ResetTimer()
 
 	for i := 0; i < t.N; i++ {
-		processCounters(&buff, time.Now().Unix())
+		processCounters(&buff, time.Now().Unix(), true)
 		buff = bytes.Buffer{}
 	}
 
@@ -744,6 +744,13 @@ func Benchmark100CounterWith1000IncrementsEach(t *testing.B) {
 
 func BenchmarkParseLine(b *testing.B) {
 	d := []byte("a.key.with-0.dash:4|c|@0.5")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+
+func BenchmarkParseLineWith3Tags(b *testing.B) {
+	d := []byte("a.key.with-0.dash.^host=dev.^env=prod.^product=sth:4|c|@0.5")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}

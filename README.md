@@ -1,14 +1,14 @@
 statsdaemon
 ==========
 
-Port of Etsy's statsd (https://github.com/etsy/statsd), written in Go (based on
+Port of Etsy's statsd server (https://github.com/etsy/statsd), written in Go (based on
   [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) and changes from
-  [alexclear/statsdaemon](https://github.com/alexclear/statsdaemon) )
+  [alexclear/statsdaemon](https://github.com/alexclear/statsdaemon) and others)
 
 Supports
 
 * Timers (with optional percentiles)
-* Counters (positive and negative with optional sampling)
+* Counters (positive and negative with optional sampling) + ability to keep absolute value by not resetting counter 
 * Gauges (including relative operations)
 * Sets
 * Key/values (unique untyped)
@@ -32,9 +32,8 @@ Installing
 ==========
 ### Building from Source
 ```
-git clone https://github.com/wojtekzw/statsdaemon
+go get github.com/wojtekzw/statsdaemon
 cd statsdaemon
-go get github.com/bmizerany/assert #for tests
 go build
 ```
 

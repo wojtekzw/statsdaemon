@@ -110,6 +110,7 @@ var (
 	debug             = flag.Bool("debug", false, "print statistics sent to backend")
 	showVersion       = flag.Bool("version", false, "print version string")
 	deleteGauges      = flag.Bool("delete-gauges", true, "don't send values to graphite for inactive gauges, as opposed to sending the previous value")
+	resetCounters     = flag.Bool("reset-counters", true, "reset counters after sending value to backend or leave current value (eg. for OpenTSDB & Grafana)")
 	persistCountKeys  = flag.Int64("persist-count-keys", 60, "number of flush-intervals to persist count keys")
 	receiveCounter    = flag.String("receive-counter", "", "Metric name for total metrics received per interval")
 	percentThreshold  = Percentiles{}
@@ -211,6 +212,8 @@ func packetHandler(s *Packet) {
 		if !ok {
 			counters[s.Bucket] = 0
 		}
+		countInactivity[s.Bucket] = 0
+
 		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
 		// set
 	case "s":
@@ -234,7 +237,7 @@ func submit(deadline time.Time, backend string) error {
 	var num int64
 	now := time.Now().Unix()
 
-	num += processCounters(&buffer, now)
+	num += processCounters(&buffer, now, *resetCounters)
 	num += processGauges(&buffer, now)
 	num += processTimers(&buffer, now, percentThreshold)
 	num += processSets(&buffer, now)
@@ -307,25 +310,46 @@ func submit(deadline time.Time, backend string) error {
 	return nil
 }
 
-func processCounters(buffer *bytes.Buffer, now int64) int64 {
-	var num int64
+func processCounters(buffer *bytes.Buffer, now int64, reset bool) int64 {
+	// Normal behaviour is to reset couners after each send
+	// "don't reset" was added for OpenTSDB and Grafana
+
+	var (
+		num int64
+	)
+
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
 		fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
-		delete(counters, bucket)
-		// set counter as inactive
-		countInactivity[bucket] = 0
+		if reset {
+			delete(counters, bucket)
+		}
+		// _, ok := countInactivity[bucket]
+		// // if not in inactive counters then set to 0 else let it grow
+		// if !ok {
+		// 	// set counter as inactive
+		// 	countInactivity[bucket] = 0
+		// }
 		num++
 	}
+
 	for bucket, purgeCount := range countInactivity {
 		if purgeCount > 0 {
-			fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
-			num++
+			// if not reset is is printed to buffer in the first loop (as it is not deleted)
+			// untill there is some time of inactivity
+			if reset {
+				fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
+				num++
+			}
 		}
 		countInactivity[bucket] += 1
 		// remove counter from sending '0'
 		if countInactivity[bucket] > *persistCountKeys {
 			delete(countInactivity, bucket)
+			// remove counter not deleted previously
+			if !reset {
+				delete(counters, bucket)
+			}
 			// remove tags associated with bucket
 			delete(tags, bucket)
 		}
