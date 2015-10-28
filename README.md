@@ -2,7 +2,8 @@ statsdaemon
 ==========
 
 Port of Etsy's statsd (https://github.com/etsy/statsd), written in Go (based on
-  [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) )
+  [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) and changes from
+  [alexclear/statsdaemon](https://github.com/alexclear/statsdaemon) )
 
 Supports
 
@@ -15,8 +16,9 @@ Supports
 Note: Only integers are supported for metric values.
 
 Backend supported
-* Graphite 
+* Graphite
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
+* OpenTSDB
 
 
 

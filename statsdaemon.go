@@ -22,15 +22,20 @@ import (
 const (
 	MAX_UNPROCESSED_PACKETS = 1000
 	TCP_READ_SIZE           = 4096
+	SEP_CHAR                = "^"
+	SEP_SPLIT               = "." + SEP_CHAR
 )
 
 var signalchan chan os.Signal
 
 type Packet struct {
-	Bucket   string
-	Value    interface{}
-	Modifier string
-	Sampling float32
+	Bucket         string
+	Value          interface{}
+	SrcBucket      string
+	GraphiteBucket string
+	Tags           map[string]string
+	Modifier       string
+	Sampling       float32
 }
 
 type GaugeData struct {
@@ -91,9 +96,10 @@ var (
 	serviceAddress    = flag.String("address", ":8125", "UDP service address")
 	tcpServiceAddress = flag.String("tcpaddr", "", "TCP service address, if set")
 	maxUdpPacketSize  = flag.Int64("max-udp-packet-size", 1472, "Maximum UDP packet size")
-	backendType       = flag.String("backend-type", "external", "Backend to use: graphite, external")
+	backendType       = flag.String("backend-type", "external", "Backend to use: graphite, opentsdb, external")
 	postFlushCmd      = flag.String("post-flush-cmd", "stdout", "Command to run on each flush")
 	graphiteAddress   = flag.String("graphite", "127.0.0.1:2003", "Graphite service address (or - to disable)")
+	openTSDBAddress   = flag.String("opentsdb", "-", "openTSDB service address (or - to disable)")
 	flushInterval     = flag.Int64("flush-interval", 10, "Flush interval (seconds)")
 	debug             = flag.Bool("debug", false, "print statistics sent to backend")
 	showVersion       = flag.Bool("version", false, "print version string")
@@ -119,6 +125,7 @@ var (
 	countInactivity = make(map[string]int64)
 	sets            = make(map[string][]string)
 	keys            = make(map[string][]string)
+	tags            = make(map[string]map[string]string)
 )
 
 func monitor() {
@@ -129,12 +136,12 @@ func monitor() {
 		case sig := <-signalchan:
 			fmt.Printf("!! Caught signal %v... shutting down\n", sig)
 			if err := submit(time.Now().Add(period), *backendType); err != nil {
-				log.Printf("ERROR: %s", err)
+				log.Printf("ERROR: submit %s", err)
 			}
 			return
 		case <-ticker.C:
 			if err := submit(time.Now().Add(period), *backendType); err != nil {
-				log.Printf("ERROR: %s", err)
+				log.Printf("ERROR: submit %s", err)
 			}
 		case s := <-In:
 			packetHandler(s)
@@ -142,6 +149,8 @@ func monitor() {
 	}
 }
 
+// packetHandler - process parsed packet and set data in
+// global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
 	if *receiveCounter != "" {
 		v, ok := counters[*receiveCounter]
@@ -151,7 +160,11 @@ func packetHandler(s *Packet) {
 		counters[*receiveCounter] += 1
 	}
 
+	// global var tags
+	tags[s.Bucket] = s.Tags
+
 	switch s.Modifier {
+	// timer
 	case "ms":
 		_, ok := timers[s.Bucket]
 		if !ok {
@@ -159,6 +172,7 @@ func packetHandler(s *Packet) {
 			timers[s.Bucket] = t
 		}
 		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+		// gauge
 	case "g":
 		gaugeValue, _ := gauges[s.Bucket]
 
@@ -184,19 +198,21 @@ func packetHandler(s *Packet) {
 		}
 
 		gauges[s.Bucket] = gaugeValue
+		// counter
 	case "c":
 		_, ok := counters[s.Bucket]
 		if !ok {
 			counters[s.Bucket] = 0
 		}
-		log.Printf("%v\n", counters)
 		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
+		// set
 	case "s":
 		_, ok := sets[s.Bucket]
 		if !ok {
 			sets[s.Bucket] = make([]string, 0)
 		}
 		sets[s.Bucket] = append(sets[s.Bucket], s.Value.(string))
+		// key/value
 	case "kv":
 		_, ok := keys[s.Bucket]
 		if !ok {
@@ -241,6 +257,8 @@ func submit(deadline time.Time, backend string) error {
 	// send stats to backend
 	switch backend {
 	case "external":
+		log.Printf("DEBUG: external [%s]\n", buffer.String())
+
 		if *postFlushCmd != "stdout" {
 			err := sendDataExtCmd(*postFlushCmd, &buffer)
 			if err != nil {
@@ -251,10 +269,10 @@ func submit(deadline time.Time, backend string) error {
 			if err := sendDataStdout(&buffer); err != nil {
 				log.Printf(err.Error())
 			}
-			log.Printf("wrote %d stats to stdout", num)
 		}
 
 	case "graphite":
+		log.Printf("DEBUG: graphite [%s]\n", buffer.String())
 
 		client, err := net.Dial("tcp", *graphiteAddress)
 		if err != nil {
@@ -266,14 +284,25 @@ func submit(deadline time.Time, backend string) error {
 		if err != nil {
 			return err
 		}
+
 		_, err = client.Write(buffer.Bytes())
 		if err != nil {
 			return fmt.Errorf("failed to write stats to graphite: %s", err)
 		}
 		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
 
+	case "opentsdb":
+		if *debug {
+			log.Printf("DEBUG: opentsdb [%s]\n", buffer.String())
+		}
+
+		err := openTSDB(*openTSDBAddress, &buffer, tags, *debug)
+		if err != nil {
+			log.Printf("Error writing to OpenTSDB: %v\n", err)
+		}
+
 	default:
-		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...", backend))
+		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...\n", backend))
 		os.Exit(1)
 	}
 
@@ -507,6 +536,10 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 }
 
 func parseLine(line []byte) *Packet {
+
+	tags := make(map[string]string)
+
+	log.Printf("DEBUG: Input line: %s", string(line))
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
 		logParseFail(line)
@@ -587,7 +620,7 @@ func parseLine(line []byte) *Packet {
 	case "ms":
 		value, err = strconv.ParseUint(string(val), 10, 64)
 		if err != nil {
-			log.Printf("ERROR: failed to ParseUint %s - %s", string(val), err)
+			log.Printf("ERROR(Timer):failed to ParseUint %s - %s", string(val), err)
 			return nil
 		}
 	case "kv":
@@ -596,12 +629,28 @@ func parseLine(line []byte) *Packet {
 		log.Printf("ERROR: unrecognized type code %q", typeCode)
 		return nil
 	}
-
+	// parse tags from bucket name
+	tagsSlice := strings.Split(string(name), SEP_SPLIT)
+	for _, e := range tagsSlice[1:] {
+		tagAndVal := strings.Split(e, "=")
+		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
+			log.Printf("Error: invalid tag format %v", e)
+		} else {
+			tags[tagAndVal[0]] = tagAndVal[1]
+		}
+	}
+	// bucket is set to a name without tags (tagsSlice[0])
+	// graphiteBucket is set to a name striped out of not allowed chars
+	bucket := sanitizeBucket(*prefix + tagsSlice[0] + *postfix)
+	graphiteBucket := sanitizeBucket(*prefix + string(name) + *postfix)
 	return &Packet{
-		Bucket:   sanitizeBucket(*prefix + string(name) + *postfix),
-		Value:    value,
-		Modifier: typeCode,
-		Sampling: sampling,
+		Bucket:         bucket,
+		Value:          value,
+		SrcBucket:      string(name),
+		GraphiteBucket: graphiteBucket,
+		Tags:           tags,
+		Modifier:       typeCode,
+		Sampling:       sampling,
 	}
 }
 
@@ -658,14 +707,29 @@ func tcpListener() {
 
 func validateFlags() error {
 	// FIXME  check all params/flags
-	if *backendType != "external" && *backendType != "graphite" {
+	if *backendType != "external" && *backendType != "graphite" && *backendType != "opentsdb" {
 		return fmt.Errorf("Parameter error: Invalid backend-type: %s\n", *backendType)
 	}
 
 	if *graphiteAddress == "-" && *backendType == "graphite" {
 		return fmt.Errorf("Parameter error: Graphite backend selected and no graphite server address\n")
 	}
+
+	if *openTSDBAddress == "-" && *backendType == "opentsdb" {
+		return fmt.Errorf("Parameter error: OpenTSDB backend selected and no OpenTSDB server address\n")
+	}
 	return nil
+}
+
+func removeEmptyLines(lines []string) []string {
+	var outLines []string
+
+	for _, v := range lines {
+		if len(v) > 0 {
+			outLines = append(outLines, v)
+		}
+	}
+	return outLines
 }
 
 func main() {
