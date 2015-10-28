@@ -41,7 +41,7 @@ type Packet struct {
 type GaugeData struct {
 	Relative bool
 	Negative bool
-	Value    uint64
+	Value    float64
 }
 
 type Uint64Slice []uint64
@@ -49,6 +49,12 @@ type Uint64Slice []uint64
 func (s Uint64Slice) Len() int           { return len(s) }
 func (s Uint64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s Uint64Slice) Less(i, j int) bool { return s[i] < s[j] }
+
+type Float64Slice []float64
+
+func (s Float64Slice) Len() int           { return len(s) }
+func (s Float64Slice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s Float64Slice) Less(i, j int) bool { return s[i] < s[j] }
 
 type Percentiles []*Percentile
 type Percentile struct {
@@ -119,10 +125,10 @@ func init() {
 var (
 	In              = make(chan *Packet, MAX_UNPROCESSED_PACKETS)
 	counters        = make(map[string]int64)
-	gauges          = make(map[string]uint64)
-	lastGaugeValue  = make(map[string]uint64)
+	gauges          = make(map[string]float64)
+	lastGaugeValue  = make(map[string]float64)
 	lastGaugeTags   = make(map[string]map[string]string)
-	timers          = make(map[string]Uint64Slice)
+	timers          = make(map[string]Float64Slice)
 	countInactivity = make(map[string]int64)
 	sets            = make(map[string][]string)
 	keys            = make(map[string][]string)
@@ -169,10 +175,10 @@ func packetHandler(s *Packet) {
 	case "ms":
 		_, ok := timers[s.Bucket]
 		if !ok {
-			var t Uint64Slice
+			var t Float64Slice
 			timers[s.Bucket] = t
 		}
-		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(uint64))
+		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(float64))
 		// gauge
 	case "g":
 		gaugeValue, _ := gauges[s.Bucket]
@@ -188,8 +194,8 @@ func packetHandler(s *Packet) {
 				}
 			} else {
 				// watch out for overflows
-				if gaugeData.Value > (math.MaxUint64 - gaugeValue) {
-					gaugeValue = math.MaxUint64
+				if gaugeData.Value > (math.MaxFloat64 - gaugeValue) {
+					gaugeValue = math.MaxFloat64
 				} else {
 					gaugeValue += gaugeData.Value
 				}
@@ -331,6 +337,7 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 	var num int64
 
 	for bucket, gauge := range gauges {
+		// FIXME MaxUint64 to MAxFloat64 ?????
 		currentValue := gauge
 		lastValue, hasLastValue := lastGaugeValue[bucket]
 		// not used
@@ -343,7 +350,7 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 
 		switch {
 		case hasChanged:
-			fmt.Fprintf(buffer, "%s %d %d\n", bucket, currentValue, now)
+			fmt.Fprintf(buffer, "%s %f %d\n", bucket, currentValue, now)
 			// FIXME Memoryleak - never free lastGaugeValue & lastGaugeTags when a lot of unique bucket are used
 			lastGaugeValue[bucket] = currentValue
 			lastGaugeTags[bucket] = tags[bucket]
@@ -351,7 +358,7 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 			delete(tags, bucket)
 			num++
 		case hasLastValue && !hasChanged && !*deleteGauges:
-			fmt.Fprintf(buffer, "%s %d %d\n", bucket, lastValue, now)
+			fmt.Fprintf(buffer, "%s %f %d\n", bucket, lastValue, now)
 			num++
 		default:
 			continue
@@ -397,6 +404,7 @@ func processKeyValue(buffer *bytes.Buffer, now int64) int64 {
 }
 
 func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
+	// FIXME - chceck float64 conversion
 	var num int64
 	for bucket, timer := range timers {
 		bucketWithoutPostfix := bucket[:len(bucket)-len(*postfix)]
@@ -408,11 +416,11 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 		maxAtThreshold := max
 		count := len(timer)
 
-		sum := uint64(0)
+		sum := float64(0)
 		for _, value := range timer {
 			sum += value
 		}
-		mean := float64(sum) / float64(len(timer))
+		mean := sum / float64(len(timer))
 
 		for _, pct := range pctls {
 			if len(timer) > 1 {
@@ -434,18 +442,19 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 			var tmpl string
 			var pctstr string
 			if pct.float >= 0 {
-				tmpl = "%s.upper_%s%s %d %d\n"
+				tmpl = "%s.upper_%s%s %f %d\n"
 				pctstr = pct.str
 			} else {
-				tmpl = "%s.lower_%s%s %d %d\n"
+				tmpl = "%s.lower_%s%s %f %d\n"
 				pctstr = pct.str[1:]
 			}
 			fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, *postfix, maxAtThreshold, now)
+
 		}
 
 		fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, *postfix, mean, now)
-		fmt.Fprintf(buffer, "%s.upper%s %d %d\n", bucketWithoutPostfix, *postfix, max, now)
-		fmt.Fprintf(buffer, "%s.lower%s %d %d\n", bucketWithoutPostfix, *postfix, min, now)
+		fmt.Fprintf(buffer, "%s.upper%s %f %d\n", bucketWithoutPostfix, *postfix, max, now)
+		fmt.Fprintf(buffer, "%s.lower%s %f %d\n", bucketWithoutPostfix, *postfix, min, now)
 		fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, *postfix, count, now)
 
 		delete(timers, bucket)
@@ -617,19 +626,19 @@ func parseLine(line []byte) *Packet {
 			s = string(val)
 		}
 
-		value, err = strconv.ParseUint(s, 10, 64)
+		value, err = strconv.ParseFloat(s, 64)
 		if err != nil {
-			log.Printf("ERROR: failed to ParseUint %s - %s", string(val), err)
+			log.Printf("ERROR: Gauge - failed to ParseFloat %s - %s", string(val), err)
 			return nil
 		}
 
-		value = GaugeData{rel, neg, value.(uint64)}
+		value = GaugeData{rel, neg, value.(float64)}
 	case "s":
 		value = string(val)
 	case "ms":
-		value, err = strconv.ParseUint(string(val), 10, 64)
+		value, err = strconv.ParseFloat(string(val), 64)
 		if err != nil {
-			log.Printf("ERROR(Timer):failed to ParseUint %s - %s", string(val), err)
+			log.Printf("ERROR: Timer - failed to ParseFloat %s - %s", string(val), err)
 			return nil
 		}
 	case "kv":

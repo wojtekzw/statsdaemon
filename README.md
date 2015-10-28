@@ -7,13 +7,13 @@ Port of Etsy's statsd (https://github.com/etsy/statsd), written in Go (based on
 
 Supports
 
-* Timing (with optional percentiles)
+* Timers (with optional percentiles)
 * Counters (positive and negative with optional sampling)
 * Gauges (including relative operations)
 * Sets
 * Key/values (unique untyped)
 
-Note: Only integers are supported for metric values.
+Float numbers are supported in Timers and  Gauges
 
 Backend supported
 * Graphite

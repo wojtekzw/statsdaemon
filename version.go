@@ -1,3 +1,4 @@
 package main
 
-const VERSION = "0.7.1"
+// VERSION - to be set on compilation
+const VERSION = "0.8.0"
