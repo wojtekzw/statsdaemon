@@ -1,1 +1,3 @@
-fix bucket and tags association
+1. fix bucket and tags association
+2. config in YAML format
+3. refactor code to depend on Packet not on bytes.Buffer
