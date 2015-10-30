@@ -12,7 +12,7 @@ import (
 	"github.com/mapmyfitness/go-opentsdb/tsdb"
 )
 
-func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]map[string]string, debug bool) error {
+func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 
 	if openTSDBAddress != "-" {
 		datapoints := []tsdb.DataPoint{}
@@ -33,8 +33,9 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]map
 		metrics = removeEmptyLines(metrics)
 		num := len(metrics)
 		for _, mtr := range metrics {
+			// cpu.load 12.50 112345566 host=dev,zone=west
 			data := strings.Split(mtr, " ")
-			if len(data) == 3 {
+			if len(data) >= 3 {
 				metric := tsdb.Metric{}
 				value := tsdb.Value{}
 				tags := tsdb.Tags{}
@@ -67,8 +68,20 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]map
 					continue
 				}
 
-				for k, v := range mtags[metricName] {
-					tags.Set(k, v)
+				if len(data) == 4 {
+					combinedTagsSlice := strings.Split(data[3], ",")
+					if len(combinedTagsSlice) > 0 {
+						for _, e := range combinedTagsSlice {
+							strSlice := strings.Split(e, "=")
+							if len(strSlice) == 2 {
+								if strSlice[0] == "" || strSlice[1] == "" {
+									log.Printf("Format error: Tag  expected. Got: %s in line \"%s\"", e, data)
+									continue
+								}
+								tags.Set(strSlice[0], strSlice[1])
+							}
+						}
+					}
 				}
 
 				datapoint.Value = &value
@@ -83,11 +96,11 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, mtags map[string]map
 		}
 
 		TSDB.Servers = append(TSDB.Servers, server)
-		_, err = TSDB.Put(datapoints)
+		resp, err := TSDB.Put(datapoints)
 		if err != nil {
 			return err
 		}
-		log.Printf("sent %d stats to %s", num, openTSDBAddress)
+		log.Printf("sent %d stats to %s (reponse: \"%v\")", num, openTSDBAddress, resp)
 
 		return nil
 

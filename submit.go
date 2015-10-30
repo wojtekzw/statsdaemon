@@ -14,11 +14,12 @@ func submit(deadline time.Time, backend string) error {
 	var num int64
 	now := time.Now().Unix()
 
-	num += processCounters(&buffer, now, *resetCounters)
-	num += processGauges(&buffer, now)
-	num += processTimers(&buffer, now, percentThreshold)
-	num += processSets(&buffer, now)
-	num += processKeyValue(&buffer, now)
+	// Universal format in buffer
+	num += processCounters(&buffer, now, *resetCounters, backend)
+	num += processGauges(&buffer, now, backend)
+	num += processTimers(&buffer, now, percentThreshold, backend)
+	num += processSets(&buffer, now, backend)
+	num += processKeyValue(&buffer, now, backend)
 
 	if num == 0 {
 		return nil
@@ -29,14 +30,13 @@ func submit(deadline time.Time, backend string) error {
 			if len(line) == 0 {
 				continue
 			}
-			log.Printf("DEBUG: %s", line)
+			log.Printf("DEBUG: Output line: %s", line)
 		}
 	}
+
 	// send stats to backend
 	switch backend {
 	case "external":
-		log.Printf("DEBUG: external [%s]\n", fixNewLine(buffer.String()))
-
 		if *postFlushCmd != "stdout" {
 			err := sendDataExtCmd(*postFlushCmd, &buffer)
 			if err != nil {
@@ -50,8 +50,6 @@ func submit(deadline time.Time, backend string) error {
 		}
 
 	case "graphite":
-		log.Printf("DEBUG: graphite [%s]\n", fixNewLine(buffer.String()))
-
 		client, err := net.Dial("tcp", *graphiteAddress)
 		if err != nil {
 			return fmt.Errorf("dialing %s failed - %s", *graphiteAddress, err)
@@ -70,11 +68,7 @@ func submit(deadline time.Time, backend string) error {
 		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
 
 	case "opentsdb":
-		if *debug {
-			log.Printf("DEBUG: opentsdb [%s]\n", fixNewLine(buffer.String()))
-		}
-
-		err := openTSDB(*openTSDBAddress, &buffer, tags, *debug)
+		err := openTSDB(*openTSDBAddress, &buffer, *debug)
 		if err != nil {
 			log.Printf("Error writing to OpenTSDB: %v\n", err)
 		}

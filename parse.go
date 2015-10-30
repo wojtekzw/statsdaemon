@@ -1,20 +1,20 @@
 package main
 
+// Functions connected with parsing data form original statsd format
+
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"log"
-	"sort"
 	"strconv"
 	"strings"
 )
 
-// Constants for tag separator encoded in bucket name
-const (
-	SEP_CHAR  = "^"
-	SEP_SPLIT = "." + SEP_CHAR
-)
+// // Constants for tag separator encoded in bucket name
+// const (
+// 	SEP_CHAR  = "^"
+// 	SEP_SPLIT = "." + SEP_CHAR
+// )
 
 // GaugeData - struct for gauges :)
 type GaugeData struct {
@@ -25,13 +25,13 @@ type GaugeData struct {
 
 // Packet - meter definition, read from statsd format
 type Packet struct {
-	Bucket         string
-	Value          interface{}
-	SrcBucket      string
-	GraphiteBucket string
-	Tags           map[string]string
-	Modifier       string
-	Sampling       float32
+	Bucket      string
+	Value       interface{}
+	SrcBucket   string
+	CleanBucket string
+	Tags        map[string]string
+	Modifier    string
+	Sampling    float32
 }
 
 // MsgParser - struct for reading data from UDP/TCP packet
@@ -170,9 +170,10 @@ func parseLine(line []byte) *Packet {
 	}
 
 	var (
-		err    error
-		value  interface{}
-		bucket string
+		err         error
+		value       interface{}
+		bucket      string
+		cleanBucket string
 	)
 
 	switch typeCode {
@@ -223,44 +224,30 @@ func parseLine(line []byte) *Packet {
 		return nil
 	}
 	// parse tags from bucket name
-	bucket, tags, err = parseBucketAndTags(string(name))
+	cleanBucket, tags, err = parseBucketAndTags(string(name))
+	if err != nil {
+		log.Printf("ERROR: problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
+		return nil
+	}
 
-	// bucket is set to a name without tags (tagsSlice[0])
-	// graphiteBucket is set to a name striped out of not allowed chars
-	bucket = sanitizeBucket(*prefix + bucket + *postfix)
-	graphiteBucket := sanitizeBucket(*prefix + string(name) + *postfix)
+	// bucket is set to a name WITH tags
+	firstDelim := ""
+	if len(tags) > 0 {
+		firstDelim, _, _ = tagsDelims(tfDefault)
+	}
+	bucket = *prefix + cleanBucket + firstDelim + normalizeTags(tags, tfDefault) + *postfix
+
 	return &Packet{
-		Bucket:         bucket,
-		Value:          value,
-		SrcBucket:      string(name),
-		GraphiteBucket: graphiteBucket,
-		Tags:           tags,
-		Modifier:       typeCode,
-		Sampling:       sampling,
+		Bucket:      bucket,
+		Value:       value,
+		SrcBucket:   string(name),
+		CleanBucket: cleanBucket,
+		Tags:        tags,
+		Modifier:    typeCode,
+		Sampling:    sampling,
 	}
 }
 
-func parseBucketAndTags(name string) (string, map[string]string, error) {
-	// split name in format
-	// measure.name.^tag1=val1.^tag2=val2
-	// this function can be extended for new "combined" formats
-
-	tags := make(map[string]string)
-
-	tagsSlice := strings.Split(string(name), SEP_SPLIT)
-	if len(tagsSlice) == 0 || tagsSlice[0] == "" {
-		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
-	}
-	for _, e := range tagsSlice[1:] {
-		tagAndVal := strings.Split(e, "=")
-		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			log.Printf("Error: invalid tag format %v", e)
-		} else {
-			tags[tagAndVal[0]] = tagAndVal[1]
-		}
-	}
-	return tagsSlice[0], tags, nil
-}
 func logParseFail(line []byte) {
 	if *debug {
 		log.Printf("ERROR: failed to parse line: %q\n", string(line))
@@ -290,7 +277,7 @@ func sanitizeBucket(bucket string) string {
 	for i := 0; i < len(bucket); i++ {
 		c := bucket[i]
 		switch {
-		case (c >= byte('a') && c <= byte('z')) || (c >= byte('A') && c <= byte('Z')) || (c >= byte('0') && c <= byte('9')) || c == byte('-') || c == byte('.') || c == byte('_') || c == byte('='):
+		case (c >= byte('a') && c <= byte('z')) || (c >= byte('A') && c <= byte('Z')) || (c >= byte('0') && c <= byte('9')) || c == byte('-') || c == byte('.') || c == byte('_') || c == byte('=') || c == byte('^'):
 			b[bl] = c
 			bl++
 		case c == byte(' '):
@@ -317,18 +304,4 @@ func removeEmptyLines(lines []string) []string {
 
 func fixNewLine(s string) string {
 	return strings.Replace(s, "\n", "\\n", -1)
-}
-
-func tagsToString(t map[string]string) string {
-	out := ""
-	keys := sort.StringSlice{}
-	for k := range t {
-		keys = append(keys, k)
-	}
-	keys.Sort()
-
-	for _, k := range keys {
-		out = out + fmt.Sprintf(", %s=%s", k, t[k])
-	}
-	return out
 }

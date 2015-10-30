@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"math"
+	"reflect"
 	"sort"
 )
 
@@ -15,7 +17,7 @@ func packetHandler(s *Packet) {
 		if !ok || v < 0 {
 			counters[*receiveCounter] = 0
 		}
-		counters[*receiveCounter] += 1
+		counters[*receiveCounter]++
 	}
 
 	// global var tags
@@ -82,7 +84,44 @@ func packetHandler(s *Packet) {
 	}
 }
 
-func processCounters(buffer *bytes.Buffer, now int64, reset bool) int64 {
+func formatMetricOutput(bucket string, value interface{}, now int64, backend string) string {
+	var ret, val string
+	val = ""
+	switch value.(type) {
+	case string:
+		val = value.(string)
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		val = fmt.Sprintf("%d", value)
+	case float32, float64:
+		val = fmt.Sprintf("%f", value)
+	default:
+		log.Printf("Error - formatMetricOutput: Invalid type: %v", reflect.TypeOf(value))
+	}
+	cleanBucket, tags, err := parseBucketAndTags(bucket)
+	if err != nil {
+		log.Printf("Error - formatMetricOutput: %v", err)
+	}
+
+	sep := ""
+	if len(tags) > 0 {
+		sep = tfGraphiteFirstDelim
+	}
+
+	switch backend {
+	case "external":
+		ret = fmt.Sprintf("%s %s %d %s", cleanBucket, val, now, normalizeTags(tags, tfPretty))
+	case "graphite":
+		ret = fmt.Sprintf("%s%s%s %s %d", cleanBucket, sep, normalizeTags(tags, tfGraphite), val, now)
+
+	case "opentsdb":
+		ret = fmt.Sprintf("%s %s %d %s", cleanBucket, val, now, normalizeTags(tags, tfPretty))
+	default:
+		ret = ""
+	}
+	return ret
+}
+
+func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string) int64 {
 	// Normal behaviour is to reset couners after each send
 	// "don't reset" was added for OpenTSDB and Grafana
 
@@ -92,16 +131,13 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool) int64 {
 
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
-		fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
+		// fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, value, now, backend))
 		if reset {
 			delete(counters, bucket)
 		}
-		// _, ok := countInactivity[bucket]
-		// // if not in inactive counters then set to 0 else let it grow
-		// if !ok {
-		// 	// set counter as inactive
-		// 	countInactivity[bucket] = 0
-		// }
+		// countInactivity[bucket] is set to 0 when new packet arrives
+		// in packetHandler
 		num++
 	}
 
@@ -110,11 +146,12 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool) int64 {
 			// if not reset is is printed to buffer in the first loop (as it is not deleted)
 			// untill there is some time of inactivity
 			if reset {
-				fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
+				// fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
+				fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, 0, now, backend))
 				num++
 			}
 		}
-		countInactivity[bucket] += 1
+		countInactivity[bucket]++
 		// remove counter from sending '0'
 		if countInactivity[bucket] > *persistCountKeys {
 			delete(countInactivity, bucket)
@@ -129,7 +166,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool) int64 {
 	return num
 }
 
-func processGauges(buffer *bytes.Buffer, now int64) int64 {
+func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 	var num int64
 
 	for bucket, gauge := range gauges {
@@ -146,7 +183,8 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 
 		switch {
 		case hasChanged:
-			fmt.Fprintf(buffer, "%s %f %d\n", bucket, currentValue, now)
+			// fmt.Fprintf(buffer, "%s %f %d\n", bucket, currentValue, now)
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, currentValue, now, backend))
 			// FIXME Memoryleak - never free lastGaugeValue & lastGaugeTags when a lot of unique bucket are used
 			lastGaugeValue[bucket] = currentValue
 			lastGaugeTags[bucket] = tags[bucket]
@@ -154,7 +192,8 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 			delete(tags, bucket)
 			num++
 		case hasLastValue && !hasChanged && !*deleteGauges:
-			fmt.Fprintf(buffer, "%s %f %d\n", bucket, lastValue, now)
+			// fmt.Fprintf(buffer, "%s %f %d\n", bucket, lastValue, now)
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, lastValue, now, backend))
 			num++
 		default:
 			continue
@@ -163,7 +202,7 @@ func processGauges(buffer *bytes.Buffer, now int64) int64 {
 	return num
 }
 
-func processSets(buffer *bytes.Buffer, now int64) int64 {
+func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
 	num := int64(len(sets))
 	for bucket, set := range sets {
 
@@ -172,14 +211,15 @@ func processSets(buffer *bytes.Buffer, now int64) int64 {
 			uniqueSet[str] = true
 		}
 
-		fmt.Fprintf(buffer, "%s %d %d\n", bucket, len(uniqueSet), now)
+		// fmt.Fprintf(buffer, "%s %d %d\n", bucket, len(uniqueSet), now)
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, len(uniqueSet), now, backend))
 		delete(sets, bucket)
 		delete(tags, bucket)
 	}
 	return num
 }
 
-func processKeyValue(buffer *bytes.Buffer, now int64) int64 {
+func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 	num := int64(len(keys))
 	for bucket, values := range keys {
 		uniqueKeyVal := map[string]bool{}
@@ -191,7 +231,8 @@ func processKeyValue(buffer *bytes.Buffer, now int64) int64 {
 				continue
 			}
 			uniqueKeyVal[value] = true
-			fmt.Fprintf(buffer, "%s %s %d\n", bucket, value, now)
+			// fmt.Fprintf(buffer, "%s %s %d\n", bucket, value, now)
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, value, now, backend))
 		}
 		delete(keys, bucket)
 		delete(tags, bucket)
@@ -199,7 +240,7 @@ func processKeyValue(buffer *bytes.Buffer, now int64) int64 {
 	return num
 }
 
-func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
+func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend string) int64 {
 	// FIXME - chceck float64 conversion
 	var num int64
 	for bucket, timer := range timers {
@@ -218,6 +259,11 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 		}
 		mean := sum / float64(len(timer))
 
+		// remove tags form bucketWithoutPostfix
+		cleanBucket, tags, err := parseBucketAndTags(bucketWithoutPostfix)
+		if err != nil {
+			log.Printf("Error parse - processTimers: %v", err)
+		}
 		for _, pct := range pctls {
 			if len(timer) > 1 {
 				var abs float64
@@ -230,7 +276,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 				// math.Floor(x + 0.5)
 				indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
 				if pct.float >= 0 {
-					indexOfPerc -= 1 // index offset=0
+					indexOfPerc-- // index offset=0
 				}
 				maxAtThreshold = timer[indexOfPerc]
 			}
@@ -238,21 +284,31 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles) int64 {
 			var tmpl string
 			var pctstr string
 			if pct.float >= 0 {
-				tmpl = "%s.upper_%s%s %f %d\n"
+				// tmpl = "%s.upper_%s%s %f %d\n"
+				tmpl = "%s.upper_%s.^%s%s"
 				pctstr = pct.str
 			} else {
-				tmpl = "%s.lower_%s%s %f %d\n"
+				// tmpl = "%s.lower_%s%s %f %d\n"
+				tmpl = "%s.lower_%s.^%s%s"
 				pctstr = pct.str[1:]
 			}
-			fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, *postfix, maxAtThreshold, now)
-
+			// fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, *postfix, maxAtThreshold, now)
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, normalizeTags(tags, tfDefault), *postfix), maxAtThreshold, now, backend))
 		}
 
-		fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, *postfix, mean, now)
-		fmt.Fprintf(buffer, "%s.upper%s %f %d\n", bucketWithoutPostfix, *postfix, max, now)
-		fmt.Fprintf(buffer, "%s.lower%s %f %d\n", bucketWithoutPostfix, *postfix, min, now)
-		fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, *postfix, count, now)
+		// fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, *postfix, mean, now)
+		// fmt.Fprintf(buffer, "%s.upper%s %f %d\n", bucketWithoutPostfix, *postfix, max, now)
+		// fmt.Fprintf(buffer, "%s.lower%s %f %d\n", bucketWithoutPostfix, *postfix, min, now)
+		// fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, *postfix, count, now)
+		sTags := normalizeTags(tags, tfDefault)
+		if len(sTags) > 0 {
+			sTags = ".^" + sTags
+		}
 
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.mean%s%s", cleanBucket, sTags, *postfix), mean, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.upper%s%s", cleanBucket, sTags, *postfix), max, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s%s", cleanBucket, sTags, *postfix), min, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s%s", cleanBucket, sTags, *postfix), count, now, backend))
 		delete(timers, bucket)
 		delete(tags, bucket)
 	}
