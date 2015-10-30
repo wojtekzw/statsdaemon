@@ -103,18 +103,20 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	}
 
 	sep := ""
+	sepTags := ""
 	if len(tags) > 0 {
 		sep = tfGraphiteFirstDelim
+		sepTags = " "
 	}
 
 	switch backend {
 	case "external":
-		ret = fmt.Sprintf("%s %s %d %s", cleanBucket, val, now, normalizeTags(tags, tfPretty))
+		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(tags, tfPretty))
 	case "graphite":
-		ret = fmt.Sprintf("%s%s%s %s %d", cleanBucket, sep, normalizeTags(tags, tfGraphite), val, now)
+		ret = fmt.Sprintf("%s%s%s %s%s%d", cleanBucket, sep, sepTags, normalizeTags(tags, tfGraphite), val, now)
 
 	case "opentsdb":
-		ret = fmt.Sprintf("%s %s %d %s", cleanBucket, val, now, normalizeTags(tags, tfPretty))
+		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(tags, tfPretty))
 	default:
 		ret = ""
 	}
@@ -285,15 +287,19 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 			var pctstr string
 			if pct.float >= 0 {
 				// tmpl = "%s.upper_%s%s %f %d\n"
-				tmpl = "%s.upper_%s.^%s%s"
+				tmpl = "%s.upper_%s%s%s%s"
 				pctstr = pct.str
 			} else {
 				// tmpl = "%s.lower_%s%s %f %d\n"
-				tmpl = "%s.lower_%s.^%s%s"
+				tmpl = "%s.lower_%s%s%s%s"
 				pctstr = pct.str[1:]
 			}
 			// fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, *postfix, maxAtThreshold, now)
-			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, normalizeTags(tags, tfDefault), *postfix), maxAtThreshold, now, backend))
+			sep := ""
+			if len(tags) > 0 {
+				sep = ".^"
+			}
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, sep, normalizeTags(tags, tfDefault), *postfix), maxAtThreshold, now, backend))
 		}
 
 		// fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, *postfix, mean, now)

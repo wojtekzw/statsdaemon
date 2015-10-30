@@ -413,13 +413,13 @@ func TestProcessCounters(t *testing.T) {
 
 	counters["gorets"] = int64(123)
 
-	num := processCounters(&buffer, now, true)
+	num := processCounters(&buffer, now, true, "external")
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "gorets 123 1418052649\n")
 
 	// run processCounters() enough times to make sure it purges items
 	for i := 0; i < int(*persistCountKeys)+10; i++ {
-		num = processCounters(&buffer, now, true)
+		num = processCounters(&buffer, now, true, "external")
 	}
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -437,7 +437,7 @@ func TestProcessTimers(t *testing.T) {
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
-	num := processTimers(&buffer, now, Percentiles{})
+	num := processTimers(&buffer, now, Percentiles{}, "external")
 
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -447,7 +447,7 @@ func TestProcessTimers(t *testing.T) {
 	assert.Equal(t, string(lines[2]), "response_time.lower 0.000000 1418052649")
 	assert.Equal(t, string(lines[3]), "response_time.count 3 1418052649")
 
-	num = processTimers(&buffer, now, Percentiles{})
+	num = processTimers(&buffer, now, Percentiles{}, "external")
 	assert.Equal(t, num, int64(0))
 }
 
@@ -461,16 +461,16 @@ func TestProcessGauges(t *testing.T) {
 
 	var buffer bytes.Buffer
 
-	num := processGauges(&buffer, now)
+	num := processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(0))
 	assert.Equal(t, buffer.String(), "")
 
 	gauges["gaugor"] = 12345
-	num = processGauges(&buffer, now)
+	num = processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 
 	gauges["gaugor"] = math.MaxUint64
-	num = processGauges(&buffer, now)
+	num = processGauges(&buffer, now, "external")
 	assert.Equal(t, buffer.String(), "gaugor 12345.000000 1418052649\ngaugor 12345.000000 1418052649\n")
 	assert.Equal(t, num, int64(1))
 }
@@ -485,16 +485,16 @@ func TestProcessDeleteGauges(t *testing.T) {
 
 	var buffer bytes.Buffer
 
-	num := processGauges(&buffer, now)
+	num := processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(0))
 	assert.Equal(t, buffer.String(), "")
 
 	gauges["gaugordelete"] = 12345
-	num = processGauges(&buffer, now)
+	num = processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 
 	gauges["gaugordelete"] = math.MaxUint64
-	num = processGauges(&buffer, now)
+	num = processGauges(&buffer, now, "external")
 	assert.Equal(t, buffer.String(), "gaugordelete 12345.000000 1418052649\n")
 	assert.Equal(t, num, int64(0))
 }
@@ -508,19 +508,19 @@ func TestProcessSets(t *testing.T) {
 
 	// three unique values
 	sets["uniques"] = []string{"123", "234", "345"}
-	num := processSets(&buffer, now)
+	num := processSets(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "uniques 3 1418052649\n")
 
 	// one value is repeated
 	buffer.Reset()
 	sets["uniques"] = []string{"123", "234", "234"}
-	num = processSets(&buffer, now)
+	num = processSets(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "uniques 2 1418052649\n")
 
 	// make sure sets are purged
-	num = processSets(&buffer, now)
+	num = processSets(&buffer, now, "external")
 	assert.Equal(t, num, int64(0))
 }
 
@@ -537,7 +537,7 @@ func TestProcessTimersUpperPercentile(t *testing.T) {
 			75,
 			"75",
 		},
-	})
+	}, "external")
 
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -559,7 +559,7 @@ func TestProcessTimersUpperPercentilePostfix(t *testing.T) {
 			75,
 			"75",
 		},
-	})
+	}, "external")
 
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -580,7 +580,7 @@ func TestProcessTimesLowerPercentile(t *testing.T) {
 			-75,
 			"-75",
 		},
-	})
+	}, "external")
 
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -670,9 +670,9 @@ func BenchmarkManyDifferentSensors(t *testing.B) {
 	var buff bytes.Buffer
 	now := time.Now().Unix()
 	t.ResetTimer()
-	processTimers(&buff, now, commonPercentiles)
-	processCounters(&buff, now, true)
-	processGauges(&buff, now)
+	processTimers(&buff, now, commonPercentiles, "external")
+	processCounters(&buff, now, true, "external")
+	processGauges(&buff, now, "external")
 }
 
 func BenchmarkOneBigTimer(t *testing.B) {
@@ -685,7 +685,7 @@ func BenchmarkOneBigTimer(t *testing.B) {
 
 	var buff bytes.Buffer
 	t.ResetTimer()
-	processTimers(&buff, time.Now().Unix(), commonPercentiles)
+	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
 }
 
 func BenchmarkLotsOfTimers(t *testing.B) {
@@ -700,7 +700,7 @@ func BenchmarkLotsOfTimers(t *testing.B) {
 
 	var buff bytes.Buffer
 	t.ResetTimer()
-	processTimers(&buff, time.Now().Unix(), commonPercentiles)
+	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
 }
 
 func BenchmarkOneTimerWith10Points(t *testing.B) {
@@ -715,7 +715,7 @@ func BenchmarkOneTimerWith10Points(t *testing.B) {
 	t.ResetTimer()
 
 	for i := 0; i < t.N; i++ {
-		processTimers(&buff, time.Now().Unix(), commonPercentiles)
+		processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
 		buff = bytes.Buffer{}
 	}
 
@@ -736,7 +736,7 @@ func Benchmark100CountersWith1000IncrementsEach(t *testing.B) {
 	t.ResetTimer()
 
 	for i := 0; i < t.N; i++ {
-		processCounters(&buff, time.Now().Unix(), true)
+		processCounters(&buff, time.Now().Unix(), true, "external")
 		buff = bytes.Buffer{}
 	}
 
