@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/boltdb/bolt"
 )
 
 // Network constants
@@ -36,6 +38,7 @@ var (
 	resetCounters     = flag.Bool("reset-counters", true, "reset counters after sending value to backend or leave current value (eg. for OpenTSDB & Grafana)")
 	persistCountKeys  = flag.Int64("persist-count-keys", 60, "number of flush-intervals to persist count keys")
 	receiveCounter    = flag.String("receive-counter", "", "Metric name for total metrics received per interval")
+	storeDb           = flag.String("store-db", "/tmp/statsdaemon.db", "Name of databse for permanent counters storage (for conversion rate to counter)")
 	percentThreshold  = Percentiles{}
 	prefix            = flag.String("prefix", "", "Prefix for all stats")
 	postfix           = flag.String("postfix", "", "Postfix for all stats (can be used to add default tags)")
@@ -58,6 +61,7 @@ var (
 	sets            = make(map[string][]string)
 	keys            = make(map[string][]string)
 	tags            = make(map[string]map[string]string)
+	dbHandle        *bolt.DB
 )
 
 func main() {
@@ -76,6 +80,14 @@ func main() {
 
 	signalchan = make(chan os.Signal, 1)
 	signal.Notify(signalchan, syscall.SIGTERM)
+
+	dbHandle, err = bolt.Open(*storeDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		log.Fatalf("Error opening %s (%s)\n", *storeDb, err)
+	}
+	// dbHandle.NoSync = true
+
+	defer dbHandle.Close()
 
 	go udpListener()
 	if *tcpServiceAddress != "" {

@@ -7,6 +7,8 @@ import (
 	"math"
 	"reflect"
 	"sort"
+
+	"github.com/boltdb/bolt"
 )
 
 // packetHandler - process parsed packet and set data in
@@ -64,7 +66,7 @@ func packetHandler(s *Packet) {
 		if !ok {
 			counters[s.Bucket] = 0
 		}
-		countInactivity[s.Bucket] = 0
+		// countInactivity[s.Bucket] = 0
 
 		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
 		// set
@@ -123,7 +125,7 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	return ret
 }
 
-func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string) int64 {
+func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string, dbHandle *bolt.DB) int64 {
 	// Normal behaviour is to reset couners after each send
 	// "don't reset" was added for OpenTSDB and Grafana
 
@@ -133,13 +135,28 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
-		// fmt.Fprintf(buffer, "%s %d %d\n", bucket, value, now)
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, value, now, backend))
-		if reset {
-			delete(counters, bucket)
+
+		startCounter, err := readInt(dbHandle, bucketName, bucket)
+		if err != nil {
+			log.Printf("%s", err)
+			startCounter = 0
 		}
-		// countInactivity[bucket] is set to 0 when new packet arrives
-		// in packetHandler
+		if reset {
+			startCounter = 0
+		}
+
+		nowCounter := startCounter + value
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, nowCounter, now, backend))
+		delete(counters, bucket)
+		delete(tags, bucket)
+
+		countInactivity[bucket] = 0
+
+		//  save counter to Bolt
+		err = storeInt(dbHandle, bucketName, bucket, nowCounter)
+		if err != nil {
+			log.Printf("%s", err)
+		}
 		num++
 	}
 
@@ -147,22 +164,23 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		if purgeCount > 0 {
 			// if not reset is is printed to buffer in the first loop (as it is not deleted)
 			// untill there is some time of inactivity
-			if reset {
-				// fmt.Fprintf(buffer, "%s %d %d\n", bucket, 0, now)
-				fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, 0, now, backend))
-				num++
+			startCounter, err := readInt(dbHandle, bucketName, bucket)
+			if err != nil {
+				log.Printf("%s", err)
+				startCounter = 0
 			}
+			if reset {
+				startCounter = 0
+			}
+
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, startCounter, now, backend))
+			num++
 		}
 		countInactivity[bucket]++
 		// remove counter from sending '0'
 		if countInactivity[bucket] > *persistCountKeys {
 			delete(countInactivity, bucket)
-			// remove counter not deleted previously
-			if !reset {
-				delete(counters, bucket)
-			}
-			// remove tags associated with bucket
-			delete(tags, bucket)
+
 		}
 	}
 	return num

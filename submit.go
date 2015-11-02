@@ -15,7 +15,7 @@ func submit(deadline time.Time, backend string) error {
 	now := time.Now().Unix()
 
 	// Universal format in buffer
-	num += processCounters(&buffer, now, *resetCounters, backend)
+	num += processCounters(&buffer, now, *resetCounters, backend, dbHandle)
 	num += processGauges(&buffer, now, backend)
 	num += processTimers(&buffer, now, percentThreshold, backend)
 	num += processSets(&buffer, now, backend)
