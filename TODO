@@ -1,3 +1,9 @@
 1. fix bucket and tags association
-2. config in YAML format
+2. config in YAML format - DONE
 3. refactor code to depend on Packet not on bytes.Buffer
+4. Fix Percentiles
+5. Rename project
+6. Build deb package
+7. Refactor error messages
+8. Count different metrics types separately
+9. Enhance test fot all new features

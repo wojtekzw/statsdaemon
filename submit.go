@@ -15,9 +15,9 @@ func submit(deadline time.Time, backend string) error {
 	now := time.Now().Unix()
 
 	// Universal format in buffer
-	num += processCounters(&buffer, now, *resetCounters, backend, dbHandle)
+	num += processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
 	num += processGauges(&buffer, now, backend)
-	num += processTimers(&buffer, now, percentThreshold, backend)
+	num += processTimers(&buffer, now, Config.PercentThreshold, backend)
 	num += processSets(&buffer, now, backend)
 	num += processKeyValue(&buffer, now, backend)
 
@@ -25,7 +25,7 @@ func submit(deadline time.Time, backend string) error {
 		return nil
 	}
 
-	if *debug {
+	if Config.Debug {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
 			if len(line) == 0 {
 				continue
@@ -37,8 +37,8 @@ func submit(deadline time.Time, backend string) error {
 	// send stats to backend
 	switch backend {
 	case "external":
-		if *postFlushCmd != "stdout" {
-			err := sendDataExtCmd(*postFlushCmd, &buffer)
+		if Config.PostFlushCmd != "stdout" {
+			err := sendDataExtCmd(Config.PostFlushCmd, &buffer)
 			if err != nil {
 				log.Printf(err.Error())
 			}
@@ -50,9 +50,9 @@ func submit(deadline time.Time, backend string) error {
 		}
 
 	case "graphite":
-		client, err := net.Dial("tcp", *graphiteAddress)
+		client, err := net.Dial("tcp", Config.GraphiteAddress)
 		if err != nil {
-			return fmt.Errorf("dialing %s failed - %s", *graphiteAddress, err)
+			return fmt.Errorf("dialing %s failed - %s", Config.GraphiteAddress, err)
 		}
 		defer client.Close()
 
@@ -65,10 +65,10 @@ func submit(deadline time.Time, backend string) error {
 		if err != nil {
 			return fmt.Errorf("failed to write stats to graphite: %s", err)
 		}
-		log.Printf("wrote %d stats to graphite(%s)", num, *graphiteAddress)
+		log.Printf("wrote %d stats to graphite(%s)", num, Config.GraphiteAddress)
 
 	case "opentsdb":
-		err := openTSDB(*openTSDBAddress, &buffer, *debug)
+		err := openTSDB(Config.OpenTSDBAddress, &buffer, Config.Debug)
 		if err != nil {
 			log.Printf("Error writing to OpenTSDB: %v\n", err)
 		}

@@ -4,12 +4,13 @@ statsdaemon
 Port of Etsy's statsd server (https://github.com/etsy/statsd), written in Go (based on
   [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) and changes from
   [alexclear/statsdaemon](https://github.com/alexclear/statsdaemon) and others)
-  with many enhacements (e.g. floats in timers and gauges, sets, key/values, absolute counters, many different backends)
+  with many enhancements (e.g. floats in timers and gauges, sets, key/values, absolute counters, many different backends)
 
 Supports
 
+Metrics types
 * Timers (with optional percentiles)
-* Counters (positive and negative with optional sampling) + ability to keep absolute value by not resetting counter
+* Counters (positive and negative with optional sampling) + ability send counter as rate(default) or absolute counter (using local BoltDB)
 * Gauges (including relative operations)
 * Sets
 * Key/values (unique untyped)
@@ -21,6 +22,11 @@ Backend supported
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
 * OpenTSDB
 
+Others
+* Read configuration from YAML file
+* Ability to save configuration to YAML file
+* UDP and TCP listeners
+
 ```
 Tag are supported as encoded in bucket name eg:
 cpu.load.idle.^host=dev.^env=prod.^zone=west
@@ -30,6 +36,12 @@ It means:
   tags: host = dev, env = prod, zone = west
 ```
 Tags encoding pattern can be changed/enchanced in function `parseBucketAndTags(name string) (string, map[string]string, error)`
+
+Importants bugs:
+* reading config from YAML overwrites config from flags - USE ONLY ONE METHOD NOW !
+** eg. statsdaemon --config="myconfig.yml" is OK
+** statsdaemon --config="myconfig.yml" --debug=true is not OK as debug will have default value or from myconfig.yml if exists in config file
+
 
 Installing
 ==========
@@ -46,38 +58,26 @@ Command Line Options
 
 ```
 Usage of ./statsdaemon:
-  -address string
-    	UDP service address (default ":8125")
-  -backend-type string
-    	Backend to use: graphite, opentsdb, external (default "external")
-  -debug
-    	print statistics sent to backend
-  -delete-gauges
-    	don't send values to graphite for inactive gauges, as opposed to sending the previous value (default true)
-  -flush-interval int
-    	Flush interval (seconds) (default 10)
-  -graphite string
-    	Graphite service address (or - to disable) (default "127.0.0.1:2003")
-  -max-udp-packet-size int
-    	Maximum UDP packet size (default 1472)
-  -opentsdb string
-    	openTSDB service address (or - to disable) (default "127.0.0.1:4242")
-  -percent-threshold value
-    	percentile calculation for timers (0-100, may be given multiple times) (default [])
-  -persist-count-keys int
-    	number of flush-intervals to persist count keys (default 60)
-  -post-flush-cmd string
-    	Command to run on each flush (default "stdout")
-  -postfix string
-    	Postfix for all stats
-  -prefix string
-    	Prefix for all stats
-  -receive-counter string
-    	Metric name for total metrics received per interval
-  -reset-counters
-    	reset counters after sending value to backend or leave current value (eg. for OpenTSDB & Grafana) (default true)
-  -tcpaddr string
-    	TCP service address, if set
-  -version
-    	print version string
+      --backend-type="external": MANDATORY: Backend to use: graphite, opentsdb, external
+      --config="/etc/statsdaemon/statsdaemon.yml": Configuration file name (warning not error if not exists)
+      --debug=false: Print statistics sent to backend
+      --delete-gauges=true: Don't send values to graphite for inactive gauges, as opposed to sending the previous value
+      --extra-tags="": Default tags added to all measures in format: tag1=value1,tag2=value2
+      --flush-interval=10: Flush interval (seconds)
+      --graphite="127.0.0.1:2003": Graphite service address
+      --log-name="stdout": Name of file to log into. If empty or "stdout" than logs to stdout
+      --max-udp-packet-size=1472: Maximum UDP packet size
+      --opentsdb="127.0.0.1:4242": OpenTSDB service address
+      --persist-count-keys=0: Number of flush-intervals to persist count keys
+      --post-flush-cmd="stdout": Command to run on each flush
+      --postfix="": Postfix for all stats
+      --prefix="": Prefix for all stats
+      --print-config=false: Print config in YAML format
+      --receive-counter="statsdaemon.metrics.count": Metric name for total metrics received per interval (no prefix,postfix added, only extra-tags)
+      --reset-counters=true: Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)
+      --store-db="/tmp/statsdaemon.db": Name of database for permanent counters storage (for conversion from rate to counter)
+      --tcp-addr="": TCP listen service address, if set
+      --udp-addr=":8125": UDP listen service address
+      --version=false: Print version string
+
 ```

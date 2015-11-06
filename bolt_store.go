@@ -1,16 +1,22 @@
 package main
 
 import (
-	"encoding/binary"
-	"fmt"
+	"encoding/json"
 	"log"
 
 	"github.com/boltdb/bolt"
 )
 
+// MeasurePoint - struct for saving do permanent storage (eg. Bolt)
+type MeasurePoint struct {
+	Value int64
+	When  int64
+}
+
 var bucketName = "counters"
 
-func storeInt(db *bolt.DB, bucketName string, name string, value int64) error {
+func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePoint) error {
+	var jsonPoint []byte
 	// store some data
 	err := db.Update(func(tx *bolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte(bucketName))
@@ -18,10 +24,12 @@ func storeInt(db *bolt.DB, bucketName string, name string, value int64) error {
 			log.Printf("Error - storeCounter - CreateBucketIfNotExists : %s", err)
 			return err
 		}
-
-		buf := make([]byte, binary.MaxVarintLen64)
-		sizeInt := binary.PutVarint(buf, value)
-		err = bucket.Put([]byte(name), buf[:sizeInt])
+		jsonPoint, err = json.Marshal(mp)
+		if err != nil {
+			log.Printf("Error - storeCounter - json: %s", err)
+			return err
+		}
+		err = bucket.Put([]byte(name), jsonPoint)
 		if err != nil {
 			log.Printf("Error - storeCounter - Put: %s", err)
 			return err
@@ -36,54 +44,29 @@ func storeInt(db *bolt.DB, bucketName string, name string, value int64) error {
 	return nil
 }
 
-func readInt(db *bolt.DB, bucketName string, name string) (int64, error) {
+func readMeasurePoint(db *bolt.DB, bucketName string, name string) (MeasurePoint, error) {
 
-	var (
-		outInt int64
-		errInt int
-	)
-
+	outMeasurePoint := MeasurePoint{}
 	err := db.View(func(tx *bolt.Tx) error {
 		bucket := tx.Bucket([]byte(bucketName))
+		// if no bucket - return nil (outMeasurePoint IS empty)
 		if bucket == nil {
-			return fmt.Errorf("Bucket %s not found!", bucketName)
+			return nil
 		}
 
 		valBuf := bucket.Get([]byte(name))
-		outInt, errInt = binary.Varint(valBuf)
-		if errInt <= 0 {
-			return fmt.Errorf("Error converting to int64. Error code %d", errInt)
+		// if no key - return nil (outMeasurePoint IS empty)
+		if len(valBuf) == 0 {
+			return nil
+		}
+
+		err := json.Unmarshal(valBuf, &outMeasurePoint)
+		if err != nil {
+			log.Printf("Error reading counters: %v", err)
+			return err
 		}
 		return nil
 	})
 
-	return outInt, err
+	return outMeasurePoint, err
 }
-
-// func main() {
-// 	db, err := bolt.Open("/tmp/bolt.db", 0644, nil)
-// 	if err != nil {
-// 		log.Fatal(err)
-// 	}
-// 	db.NoSync = true
-//
-// 	defer db.Close()
-//
-// 	key := "counter"
-// 	value := int64(10)
-//
-// 	for i := 0; i <= 7000; i++ {
-// 		value = int64(rand.Intn(10000))
-// 		err = storeInt(db, bucketName, key, value)
-// 		if err != nil {
-// 			log.Printf("Error %s", err)
-// 		}
-// 		_, err := readInt(db, bucketName, key)
-// 		if err != nil {
-// 			log.Printf("%s", err)
-// 		}
-//
-// 		// fmt.Printf("In: %d, Out: %d, Equals:%t\n", value, val, value == val)
-// 	}
-//
-// }

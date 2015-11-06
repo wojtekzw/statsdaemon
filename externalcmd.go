@@ -1,4 +1,4 @@
-// filtercmd.go
+// externalcmd.go
 package main
 
 import (

@@ -1,0 +1,29 @@
+{
+	"ArtifactsDest": "binary",
+	"Tasks": [
+		"default"
+	],
+	"Arch": "amd64",
+	"Os": "linux,darwin",
+	"ResourcesInclude": "*LICENSE*, README*",
+	"MainDirsExclude": "tools/",
+	"PackageVersion": "0.9.1",
+	"ConfigVersion": "0.9",
+	"TaskSettings": {
+            "go-fmt": {
+                "dir": "."
+            },
+            "go-test": {
+                "dir": "."
+            },
+            "pkg-build": {
+                "metadata": {
+                    "maintainer": "Wojciech Zwiefka <wzwiefka@getresponse.com>"
+                },
+                "metadata-deb": {
+                    "Depends": ""
+                },
+                "rmtemp": true
+            }
+        }
+}

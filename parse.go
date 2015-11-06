@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-// // Constants for tag separator encoded in bucket name
-// const (
-// 	SEP_CHAR  = "^"
-// 	SEP_SPLIT = "." + SEP_CHAR
-// )
-
 // GaugeData - struct for gauges :)
 type GaugeData struct {
 	Relative bool
@@ -67,9 +61,9 @@ func (mp *MsgParser) Next() (*Packet, bool) {
 		idx := len(buf)
 		end := idx
 		if mp.partialReads {
-			end += TCP_READ_SIZE
+			end += tcpReadSize
 		} else {
-			end += int(*maxUdpPacketSize)
+			end += int(Config.MaxUDPPacketSize)
 		}
 		if cap(buf) >= end {
 			buf = buf[:end]
@@ -127,7 +121,7 @@ func parseLine(line []byte) *Packet {
 
 	tags := make(map[string]string)
 
-	if *debug {
+	if Config.Debug {
 		log.Printf("DEBUG: Input packet line: %s", string(line))
 	}
 
@@ -235,7 +229,7 @@ func parseLine(line []byte) *Packet {
 	if len(tags) > 0 {
 		firstDelim, _, _ = tagsDelims(tfDefault)
 	}
-	bucket = *prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(tags, tfDefault) + *postfix
+	bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tags, Config.ExtraTagsHash), tfDefault) + Config.Postfix
 
 	return &Packet{
 		Bucket:      bucket,
@@ -249,7 +243,7 @@ func parseLine(line []byte) *Packet {
 }
 
 func logParseFail(line []byte) {
-	if *debug {
+	if Config.Debug {
 		log.Printf("ERROR: failed to parse line: %q\n", string(line))
 	}
 }

@@ -14,12 +14,12 @@ import (
 // packetHandler - process parsed packet and set data in
 // global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
-	if *receiveCounter != "" {
-		v, ok := counters[*receiveCounter]
+	if Config.ReceiveCounterWithTags != "" {
+		v, ok := counters[Config.ReceiveCounterWithTags]
 		if !ok || v < 0 {
-			counters[*receiveCounter] = 0
+			counters[Config.ReceiveCounterWithTags] = 0
 		}
-		counters[*receiveCounter]++
+		counters[Config.ReceiveCounterWithTags]++
 	}
 
 	// global var tags
@@ -130,32 +130,38 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 	// "don't reset" was added for OpenTSDB and Grafana
 
 	var (
-		num int64
+		num                      int64
+		err                      error
+		startCounter, nowCounter MeasurePoint
 	)
 
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
 
-		startCounter, err := readInt(dbHandle, bucketName, bucket)
-		if err != nil {
-			log.Printf("%s", err)
-			startCounter = 0
-		}
-		if reset {
-			startCounter = 0
+		if !reset {
+			startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
+			if err != nil {
+				log.Printf("%s", err)
+			}
+		} else {
+			startCounter.Value = 0
+			startCounter.When = now
 		}
 
-		nowCounter := startCounter + value
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, nowCounter, now, backend))
+		nowCounter.Value = startCounter.Value + value
+		nowCounter.When = now
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, nowCounter.Value, now, backend))
 		delete(counters, bucket)
 		delete(tags, bucket)
 
 		countInactivity[bucket] = 0
 
-		//  save counter to Bolt
-		err = storeInt(dbHandle, bucketName, bucket, nowCounter)
-		if err != nil {
-			log.Printf("%s", err)
+		if !reset {
+			//  save counter to Bolt
+			err = storeMeasurePoint(dbHandle, bucketName, bucket, nowCounter)
+			if err != nil {
+				log.Printf("%s", err)
+			}
 		}
 		num++
 	}
@@ -164,21 +170,22 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		if purgeCount > 0 {
 			// if not reset is is printed to buffer in the first loop (as it is not deleted)
 			// untill there is some time of inactivity
-			startCounter, err := readInt(dbHandle, bucketName, bucket)
-			if err != nil {
-				log.Printf("%s", err)
-				startCounter = 0
-			}
-			if reset {
-				startCounter = 0
+			if !reset {
+				startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
+				if err != nil {
+					log.Printf("%s", err)
+				}
+			} else {
+				startCounter.Value = 0
+				startCounter.When = now
 			}
 
-			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, startCounter, now, backend))
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, startCounter.Value, now, backend))
 			num++
 		}
 		countInactivity[bucket]++
 		// remove counter from sending '0'
-		if countInactivity[bucket] > *persistCountKeys {
+		if countInactivity[bucket] > Config.PersistCountKeys {
 			delete(countInactivity, bucket)
 
 		}
@@ -211,7 +218,7 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 			gauges[bucket] = math.MaxUint64
 			delete(tags, bucket)
 			num++
-		case hasLastValue && !hasChanged && !*deleteGauges:
+		case hasLastValue && !hasChanged && !Config.DeleteGauges:
 			// fmt.Fprintf(buffer, "%s %f %d\n", bucket, lastValue, now)
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, lastValue, now, backend))
 			num++
@@ -264,7 +271,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 	// FIXME - chceck float64 conversion
 	var num int64
 	for bucket, timer := range timers {
-		bucketWithoutPostfix := bucket[:len(bucket)-len(*postfix)]
+		bucketWithoutPostfix := bucket[:len(bucket)-len(Config.Postfix)]
 		num++
 
 		sort.Sort(timer)
@@ -312,27 +319,27 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 				tmpl = "%s.lower_%s%s%s%s"
 				pctstr = pct.str[1:]
 			}
-			// fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, *postfix, maxAtThreshold, now)
+			// fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, Config.Postfix, maxAtThreshold, now)
 			sep := ""
 			if len(tags) > 0 {
 				sep = ".^"
 			}
-			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, sep, normalizeTags(tags, tfDefault), *postfix), maxAtThreshold, now, backend))
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, sep, normalizeTags(tags, tfDefault), Config.Postfix), maxAtThreshold, now, backend))
 		}
 
-		// fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, *postfix, mean, now)
-		// fmt.Fprintf(buffer, "%s.upper%s %f %d\n", bucketWithoutPostfix, *postfix, max, now)
-		// fmt.Fprintf(buffer, "%s.lower%s %f %d\n", bucketWithoutPostfix, *postfix, min, now)
-		// fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, *postfix, count, now)
+		// fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, Config.Postfix, mean, now)
+		// fmt.Fprintf(buffer, "%s.upper%s %f %d\n", bucketWithoutPostfix, Config.Postfix, max, now)
+		// fmt.Fprintf(buffer, "%s.lower%s %f %d\n", bucketWithoutPostfix, Config.Postfix, min, now)
+		// fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, Config.Postfix, count, now)
 		sTags := normalizeTags(tags, tfDefault)
 		if len(sTags) > 0 {
 			sTags = ".^" + sTags
 		}
 
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.mean%s%s", cleanBucket, sTags, *postfix), mean, now, backend))
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.upper%s%s", cleanBucket, sTags, *postfix), max, now, backend))
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s%s", cleanBucket, sTags, *postfix), min, now, backend))
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s%s", cleanBucket, sTags, *postfix), count, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.mean%s%s", cleanBucket, sTags, Config.Postfix), mean, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.upper%s%s", cleanBucket, sTags, Config.Postfix), max, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s%s", cleanBucket, sTags, Config.Postfix), min, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s%s", cleanBucket, sTags, Config.Postfix), count, now, backend))
 		delete(timers, bucket)
 		delete(tags, bucket)
 	}

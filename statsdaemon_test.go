@@ -2,16 +2,19 @@ package main
 
 import (
 	"bytes"
-	"flag"
+	"log"
 	"math"
 	"math/rand"
 	"net"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/bmizerany/assert"
+	"github.com/boltdb/bolt"
+	flag "github.com/ogier/pflag"
 )
 
 var commonPercentiles = Percentiles{
@@ -19,6 +22,24 @@ var commonPercentiles = Percentiles{
 		99,
 		"99",
 	},
+}
+
+func init() {
+	readConfig(false)
+}
+
+func removeFile(filename string) {
+	if _, err := os.Stat(filename); err == nil {
+		err := os.Remove(filename)
+		if err != nil {
+			log.Printf("Error removeing file: %s", err)
+		}
+	}
+}
+
+func closeAndRemove(db *bolt.DB, filename string) {
+	db.Close()
+	removeFile(filename)
 }
 
 func TestRemoveEmptyLines(t *testing.T) {
@@ -148,6 +169,7 @@ func TestParseLineMisc(t *testing.T) {
 	assert.Equal(t, float32(1), packet.Sampling)
 
 	flag.Set("prefix", "test.")
+
 	d = []byte("prefix:4|c")
 	packet = parseLine(d)
 	assert.Equal(t, "test.prefix", packet.Bucket)
@@ -289,7 +311,7 @@ func TestMultiLine(t *testing.T) {
 
 func TestPacketHandlerReceiveCounter(t *testing.T) {
 	counters = make(map[string]int64)
-	*receiveCounter = "countme"
+	Config.ReceiveCounterWithTags = "countme"
 
 	p := &Packet{
 		Bucket:   "gorets",
@@ -406,27 +428,38 @@ func TestPacketHandlerSet(t *testing.T) {
 
 func TestProcessCounters(t *testing.T) {
 
-	*persistCountKeys = int64(10)
+	Config.PersistCountKeys = int64(10)
 	counters = make(map[string]int64)
 	var buffer bytes.Buffer
 	now := int64(1418052649)
 
 	counters["gorets"] = int64(123)
 
-	num := processCounters(&buffer, now, true, "external")
+	var err error
+	Config.StoreDb = "/tmp/stats_test.db"
+	removeFile(Config.StoreDb)
+
+	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
+	}
+
+	defer closeAndRemove(dbHandle, Config.StoreDb)
+
+	num := processCounters(&buffer, now, true, "external", dbHandle)
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "gorets 123 1418052649\n")
 
 	// run processCounters() enough times to make sure it purges items
-	for i := 0; i < int(*persistCountKeys)+10; i++ {
-		num = processCounters(&buffer, now, true, "external")
+	for i := 0; i < int(Config.PersistCountKeys)+10; i++ {
+		num = processCounters(&buffer, now, true, "external", dbHandle)
 	}
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
 	// expect two more lines - the good one and an empty one at the end
-	assert.Equal(t, len(lines), int(*persistCountKeys+2))
+	assert.Equal(t, len(lines), int(Config.PersistCountKeys+2))
 	assert.Equal(t, string(lines[0]), "gorets 123 1418052649")
-	assert.Equal(t, string(lines[*persistCountKeys]), "gorets 0 1418052649")
+	assert.Equal(t, string(lines[Config.PersistCountKeys]), "gorets 0 1418052649")
 }
 
 func TestProcessTimers(t *testing.T) {
@@ -595,7 +628,7 @@ func TestMultipleUDPSends(t *testing.T) {
 	listener, err := net.ListenUDP("udp", address)
 	assert.Equal(t, nil, err)
 
-	ch := make(chan *Packet, MAX_UNPROCESSED_PACKETS)
+	ch := make(chan *Packet, maxUnprocessedPackets)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -667,11 +700,26 @@ func BenchmarkManyDifferentSensors(t *testing.B) {
 		}
 	}
 
-	var buff bytes.Buffer
+	var (
+		buff bytes.Buffer
+		err  error
+	)
+
+	Config.StoreDb = "/tmp/stats_test.db"
+	removeFile(Config.StoreDb)
+
+	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
+	}
+	// dbHandle.NoSync = true
+
+	defer closeAndRemove(dbHandle, Config.StoreDb)
+
 	now := time.Now().Unix()
 	t.ResetTimer()
 	processTimers(&buff, now, commonPercentiles, "external")
-	processCounters(&buff, now, true, "external")
+	processCounters(&buff, now, true, "external", dbHandle)
 	processGauges(&buff, now, "external")
 }
 
@@ -732,11 +780,26 @@ func Benchmark100CountersWith1000IncrementsEach(t *testing.B) {
 		}
 	}
 
-	var buff bytes.Buffer
+	var (
+		buff bytes.Buffer
+		err  error
+	)
+
+	Config.StoreDb = "/tmp/stats_test.db"
+	removeFile(Config.StoreDb)
+
+	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
+	}
+	// dbHandle.NoSync = true
+
+	defer closeAndRemove(dbHandle, Config.StoreDb)
+
 	t.ResetTimer()
 
 	for i := 0; i < t.N; i++ {
-		processCounters(&buff, time.Now().Unix(), true, "external")
+		processCounters(&buff, time.Now().Unix(), true, "external", dbHandle)
 		buff = bytes.Buffer{}
 	}
 

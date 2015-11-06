@@ -1,0 +1,19 @@
+# Default config file in YAML based on config options
+udp-addr: :8125
+tcp-addr: ""
+max-udp-packet-size: 1472
+backend-type: external
+post-flush-cmd: stdout
+graphite: 127.0.0.1:2003
+opentsdb: 127.0.0.1:4242
+flush-interval: 10
+debug: false
+delete-gauges: true
+reset-counters: true
+persist-count-keys: 0
+receive-counter: statsdaemon.metrics.count
+store-db: /tmp/statsdaemon.db
+prefix: ""
+postfix: ""
+extra-tags: ""
+log-name: stdout

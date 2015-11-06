@@ -123,11 +123,39 @@ func tagsToSortedSlice(tagMap map[string]string) tagSlice {
 	return tags
 }
 
+func addTags(t1, t2 map[string]string) map[string]string {
+	// add t2 + t1
+	// t1 overwrites tags in t2, as t1 is more important
+	// t1 - bucket tags, t2 extra tags
+	for k, v := range t1 {
+		t2[k] = v
+	}
+	return t2
+}
 func normalizeTags(t map[string]string, tf uint) string {
 
 	return tagsToSortedSlice(t).StringType(tf)
 }
 
+func parseTags(tagsStr string) map[string]string {
+
+	tags := make(map[string]string)
+
+	tagsSlice := strings.Split(tagsStr, ",")
+	if len(tagsSlice) == 1 && tagsSlice[0] == "" {
+		// it's OK to have empty tags
+		return tags
+	}
+	for _, e := range tagsSlice {
+		tagAndVal := strings.Split(e, "=")
+		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
+			log.Printf("Error: invalid tag format %v (%v) ", tagsSlice[1:], tagsSlice)
+		} else {
+			tags[strings.TrimSpace(tagAndVal[0])] = strings.TrimSpace(tagAndVal[1])
+		}
+	}
+	return tags
+}
 func parseBucketAndTags(name string) (string, map[string]string, error) {
 	// split name in format
 	// measure.name.^tag1=val1.^tag2=val2

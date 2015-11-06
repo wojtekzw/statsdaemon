@@ -6,12 +6,16 @@ import (
 	"strings"
 )
 
+// Percentiles - slice of percentile with name
 type Percentiles []*Percentile
+
+// Percentile - percentile - float with percentile name
 type Percentile struct {
 	float float64
 	str   string
 }
 
+// Set percentile structure
 func (a *Percentiles) Set(s string) error {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
