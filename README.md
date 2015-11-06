@@ -39,8 +39,9 @@ Tags encoding pattern can be changed/enchanced in function `parseBucketAndTags(n
 
 Importants bugs:
 * reading config from YAML overwrites config from flags - USE ONLY ONE METHOD NOW !
-  * eg. statsdaemon --config="myconfig.yml" is OK
-  * statsdaemon --config="myconfig.yml" --debug=true is not OK as debug will have default value or from myconfig.yml if exists in config file
+  * statsdaemon --config="myconfig.yml" - only config file is OK
+  * statsdaemon --debug=true --backend=external --udp-addr=":8125" - only flags is OK
+  * statsdaemon --config="myconfig.yml" --debug=true - flags & config file is not OK as debug will have default value or from myconfig.yml if exists in config file
 
 
 Installing
