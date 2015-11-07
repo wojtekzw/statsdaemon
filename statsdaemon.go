@@ -224,11 +224,15 @@ func main() {
 	}
 
 	signalchan = make(chan os.Signal, 1)
-	signal.Notify(signalchan, syscall.SIGTERM)
+	signal.Notify(signalchan, syscall.SIGTERM, syscall.SIGQUIT)
 
 	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
+		log.WithFields(log.Fields{
+			"in":    "main",
+			"after": "Open",
+			"ctx":   "Bolt DB open",
+		}).Fatalf("%s", err)
 	}
 	// dbHandle.NoSync = true
 
@@ -262,48 +266,79 @@ func validateConfig() error {
 }
 
 func udpListener() {
-	address, _ := net.ResolveUDPAddr("udp", Config.UDPServiceAddress)
-	log.Printf("listening on %s", address)
+	logCtx := log.WithFields(log.Fields{
+		"in":    "udpListener",
+		"after": "ResolveUDPAddr",
+		"ctx":   "Start UDP listener",
+	})
+
+	address, err := net.ResolveUDPAddr("udp", Config.UDPServiceAddress)
+	if err != nil {
+		logCtx.Fatalf("%s", err)
+	}
+	logCtx.Infof("Listening on %s", address)
+
 	listener, err := net.ListenUDP("udp", address)
 	if err != nil {
-		log.Fatalf("ERROR: ListenUDP - %s", err)
+
+		logCtx.WithField("after", "ListenUDP").Fatalf("%s", err)
 	}
 
 	parseTo(listener, false, In)
 }
 
 func tcpListener() {
-	address, _ := net.ResolveTCPAddr("tcp", Config.TCPServiceAddress)
-	log.Printf("listening on %s", address)
+	logCtx := log.WithFields(log.Fields{
+		"in":    "tcpListener",
+		"after": "ResolveTCPAddr",
+		"ctx":   "Start TCP listener",
+	})
+	address, err := net.ResolveTCPAddr("tcp", Config.TCPServiceAddress)
+	if err != nil {
+		logCtx.Fatalf("%s", err)
+	}
+	logCtx.Infof("listening on %s", address)
 	listener, err := net.ListenTCP("tcp", address)
 	if err != nil {
-		log.Fatalf("ERROR: ListenTCP - %s", err)
+		logCtx.WithField("after", "ListenTCP").Fatalf("%s", err)
 	}
 	defer listener.Close()
+
+	logCtx = log.WithFields(log.Fields{
+		"in":    "tcpListener",
+		"after": "AcceptTCP",
+		"ctx":   "Accept TCP loop",
+	})
 
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
-			log.Fatalf("ERROR: AcceptTCP - %s", err)
+			logCtx.Fatalf("%s", err)
 		}
 		go parseTo(conn, true, In)
 	}
 }
 
 func monitor() {
+	logCtx := log.WithFields(log.Fields{
+		"in":    "monitor",
+		"after": "submit",
+		"ctx":   "Main processing loop",
+	})
+
 	period := time.Duration(Config.FlushInterval) * time.Second
 	ticker := time.NewTicker(period)
 	for {
 		select {
 		case sig := <-signalchan:
-			fmt.Printf("!! Caught signal %v... shutting down\n", sig)
+			logCtx.WithField("after", "signal").Infof("Caught signal \"%v\"... shutting down", sig)
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
-				log.Printf("ERROR: submit %s", err)
+				logCtx.Errorf("%s", err)
 			}
 			return
 		case <-ticker.C:
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
-				log.Printf("ERROR: submit %s", err)
+				logCtx.Errorf("%s", err)
 			}
 		case s := <-In:
 			packetHandler(s)

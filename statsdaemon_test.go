@@ -32,7 +32,7 @@ func removeFile(filename string) {
 	if _, err := os.Stat(filename); err == nil {
 		err := os.Remove(filename)
 		if err != nil {
-			log.Printf("Error removeing file: %s", err)
+			log.Printf("Error removing file: %s", err)
 		}
 	}
 }
@@ -177,15 +177,6 @@ func TestParseLineMisc(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
 	flag.Set("prefix", "")
-
-	flag.Set("postfix", ".test")
-	d = []byte("postfix:4|c")
-	packet = parseLine(d)
-	assert.Equal(t, "postfix.test", packet.Bucket)
-	assert.Equal(t, int64(4), packet.Value.(int64))
-	assert.Equal(t, "c", packet.Modifier)
-	assert.Equal(t, float32(1), packet.Sampling)
-	flag.Set("postfix", "")
 
 	d = []byte("a.key.with-0.dash:4|c\ngauge:3|g")
 	parser := NewParser(bytes.NewBuffer(d), true)

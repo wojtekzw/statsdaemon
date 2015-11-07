@@ -3,7 +3,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,16 +11,19 @@ import (
 	"github.com/mapmyfitness/go-opentsdb/tsdb"
 )
 
-func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
+func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
+	logCtx := log.WithFields(log.Fields{
+		"in":  "openTSDB",
+		"ctx": "Metric format error",
+	})
 
-	if openTSDBAddress != "-" {
+	if config.OpenTSDBAddress != "-" && config.OpenTSDBAddress != "" {
 		datapoints := []tsdb.DataPoint{}
 		TSDB := tsdb.TSDB{}
 		server := tsdb.Server{}
-		serverAdress := strings.Split(openTSDBAddress, ":")
+		serverAdress := strings.Split(config.OpenTSDBAddress, ":")
 		if len(serverAdress) != 2 {
-			errmsg := fmt.Sprintf("Error: Incorrect openTSDB server address %v", serverAdress)
-			return errors.New(errmsg)
+			return fmt.Errorf("Incorrect openTSDB server address %v", serverAdress)
 		}
 		port, err := strconv.ParseUint(serverAdress[1], 10, 32)
 		if err != nil {
@@ -33,7 +35,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 		metrics = removeEmptyLines(metrics)
 		num := len(metrics)
 		for _, mtr := range metrics {
-			// cpu.load 12.50 112345566 host=dev,zone=west
+			// target format: cpu.load 12.50 112345566 host=dev,zone=west
 			data := strings.Split(mtr, " ")
 			if len(data) >= 3 {
 				metric := tsdb.Metric{}
@@ -48,7 +50,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 				val, err := strconv.ParseFloat(data[1], 64)
 				if err != nil {
 					// continue on error in one metric
-					log.Printf("Format error: Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
+					logCtx.WithField("after", "ParseFloat").Errorf("Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
 					continue
 				}
 				value.Set(val)
@@ -56,7 +58,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 				// parse timestamp
 				err = timestamp.Parse(data[2])
 				if err != nil {
-					log.Printf("Format error: Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
+					logCtx.WithField("after", "Parse").Errorf("Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
 					continue
 				}
 
@@ -64,7 +66,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 				metricName := data[0]
 				err = metric.Set(metricName)
 				if err != nil {
-					log.Printf("Format error: Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
+					logCtx.WithField("after", "Set").Errorf("Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
 					continue
 				}
 
@@ -75,7 +77,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 							strSlice := strings.Split(e, "=")
 							if len(strSlice) == 2 {
 								if strSlice[0] == "" || strSlice[1] == "" {
-									log.Printf("Format error: Tag  expected. Got: %s in line \"%s\"", e, data)
+									logCtx.WithField("after", "Split").Errorf("Tag  expected. Got: %s in line \"%s\"", e, data)
 									continue
 								}
 								tags.Set(strSlice[0], strSlice[1])
@@ -90,7 +92,7 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 				datapoint.Timestamp = &timestamp
 				datapoints = append(datapoints, datapoint)
 			} else {
-				log.Printf("Format error: Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
+				logCtx.WithField("after", "Split").Errorf("Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
 			}
 
 		}
@@ -100,11 +102,11 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("sent %d stats to %s", num, openTSDBAddress)
+		logCtx.WithField("after", "Put").Infof("sent %d stats to %s", num, config.OpenTSDBAddress)
 
 		return nil
 
 	}
+	return fmt.Errorf("No valid OpenTSDB address: %s", config.OpenTSDBAddress)
 
-	return nil
 }

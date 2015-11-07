@@ -88,6 +88,10 @@ func packetHandler(s *Packet) {
 
 func formatMetricOutput(bucket string, value interface{}, now int64, backend string) string {
 	var ret, val string
+	logCtx := log.WithFields(log.Fields{
+		"in":  "formatMetricOutput",
+		"ctx": "Format default output",
+	})
 	val = ""
 	switch value.(type) {
 	case string:
@@ -97,32 +101,32 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	case float32, float64:
 		val = fmt.Sprintf("%f", value)
 	default:
-		log.Printf("Error - formatMetricOutput: Invalid type: %v", reflect.TypeOf(value))
-	}
-	cleanBucket, tags, err := parseBucketAndTags(bucket)
-	if err != nil {
-		log.Printf("Error - formatMetricOutput: %v", err)
+		logCtx.WithField("after", "default type").Errorf("Invalid type: %v", reflect.TypeOf(value))
 	}
 
-	sep := ""
+	cleanBucket, localTags, err := parseBucketAndTags(bucket)
+	if err != nil {
+		logCtx.WithField("after", "parseBucketAndTags").Errorf("%s", err)
+	}
+
+	setFirstGraphite := ""
 	sepTags := ""
-	if len(tags) > 0 || len(Config.ExtraTagsHash) > 0 {
-		sep = tfGraphiteFirstDelim
-		sepTags = " "
+	if len(localTags) > 0 || len(Config.ExtraTagsHash) > 0 {
+		setFirstGraphite = tfGraphiteFirstDelim
+		if backend != "graphite" {
+			sepTags = " "
+		}
 	}
 
 	switch backend {
-	case "external":
-		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(tags, tfPretty))
+	case "external", "opentsdb":
+		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(localTags, tfPretty))
 	case "graphite":
-		ret = fmt.Sprintf("%s%s%s %s%s%d", cleanBucket, sep, sepTags, normalizeTags(tags, tfGraphite), val, now)
-
-	case "opentsdb":
-		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(tags, tfPretty))
+		ret = fmt.Sprintf("%s%s%s%s %s %d", cleanBucket, setFirstGraphite, sepTags, normalizeTags(localTags, tfGraphite), val, now)
 	default:
 		ret = ""
 	}
-	fmt.Printf("DEBUG-BACKEND:%s\n", ret)
+	logCtx.WithField("after", "format line").Debugf("%s", ret)
 	return ret
 }
 
@@ -135,14 +139,17 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		err                      error
 		startCounter, nowCounter MeasurePoint
 	)
-
+	logCtx := log.WithFields(log.Fields{
+		"in":  "processCounters",
+		"ctx": "calculate counters",
+	})
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
 
 		if !reset {
 			startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 			if err != nil {
-				log.Printf("%s", err)
+				logCtx.WithField("after", "readMeasurePoint").Errorf("%s", err)
 			}
 		} else {
 			startCounter.Value = 0
@@ -161,7 +168,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			//  save counter to Bolt
 			err = storeMeasurePoint(dbHandle, bucketName, bucket, nowCounter)
 			if err != nil {
-				log.Printf("%s", err)
+				logCtx.WithField("after", "storeMeasurePoint").Errorf("%s", err)
 			}
 		}
 		num++
@@ -174,7 +181,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			if !reset {
 				startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 				if err != nil {
-					log.Printf("%s", err)
+					logCtx.WithField("after", "readMeasurePoint").Errorf("%s", err)
 				}
 			} else {
 				startCounter.Value = 0
@@ -201,8 +208,7 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 		// FIXME MaxUint64 to MAxFloat64 ?????
 		currentValue := gauge
 		lastValue, hasLastValue := lastGaugeValue[bucket]
-		// not used
-		// lastTags := lastGaugeTags[bucket]
+
 		var hasChanged bool
 
 		if gauge != math.MaxUint64 {
@@ -211,7 +217,6 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 
 		switch {
 		case hasChanged:
-			// fmt.Fprintf(buffer, "%s %f %d\n", bucket, currentValue, now)
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, currentValue, now, backend))
 			// FIXME Memoryleak - never free lastGaugeValue & lastGaugeTags when a lot of unique bucket are used
 			lastGaugeValue[bucket] = currentValue
@@ -220,7 +225,6 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 			delete(tags, bucket)
 			num++
 		case hasLastValue && !hasChanged && !Config.DeleteGauges:
-			// fmt.Fprintf(buffer, "%s %f %d\n", bucket, lastValue, now)
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, lastValue, now, backend))
 			num++
 		default:
@@ -239,7 +243,6 @@ func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
 			uniqueSet[str] = true
 		}
 
-		// fmt.Fprintf(buffer, "%s %d %d\n", bucket, len(uniqueSet), now)
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, len(uniqueSet), now, backend))
 		delete(sets, bucket)
 		delete(tags, bucket)
@@ -259,7 +262,6 @@ func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 				continue
 			}
 			uniqueKeyVal[value] = true
-			// fmt.Fprintf(buffer, "%s %s %d\n", bucket, value, now)
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, value, now, backend))
 		}
 		delete(keys, bucket)
@@ -272,10 +274,11 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 	// FIXME - chceck float64 conversion
 	var num int64
 
-	// strExtraTags := normalizeTags(Config.ExtraTagsHash, tfDefault)
-	// lenExtraTags := len(strExtraTags)
+	logCtx := log.WithFields(log.Fields{
+		"in":  "processTimers",
+		"ctx": "calculate timers",
+	})
 	for bucket, timer := range timers {
-		// log.Printf("TIMERS: bucket=(%s) timer=(%s) lenExtraTags=(%d) strExtraTags=(%s)\n", bucket, timer, lenExtraTags, strExtraTags)
 		bucketWithoutPostfix := bucket
 		num++
 
@@ -292,11 +295,11 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		mean := sum / float64(len(timer))
 
 		// remove tags form bucketWithoutPostfix
-		cleanBucket, tags, err := parseBucketAndTags(bucketWithoutPostfix)
+		cleanBucket, localTags, err := parseBucketAndTags(bucketWithoutPostfix)
 		if err != nil {
-			log.Printf("Error parse - processTimers: %v", err)
+			logCtx.WithField("after", "parseBucketAndTags").Errorf("%s", err)
 		}
-		fullNormalizedTags := normalizeTags(addTags(tags, Config.ExtraTagsHash), tfDefault)
+		fullNormalizedTags := normalizeTags(addTags(localTags, Config.ExtraTagsHash), tfDefault)
 
 		for _, pct := range pctls {
 			if len(timer) > 1 {
@@ -344,7 +347,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s", cleanBucket, sTags), min, now, backend))
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s", cleanBucket, sTags), count, now, backend))
 		delete(timers, bucket)
-		delete(tags, bucket)
+		delete(localTags, bucket)
 	}
 	return num
 }

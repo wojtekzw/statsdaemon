@@ -49,11 +49,15 @@ func tagsDelims(tf uint) (string, string, string) {
 		firstDelim, kvDelim, tagsDelim string
 	)
 
+	logCtx := log.WithFields(log.Fields{
+		"in":  "tagsDelims",
+		"ctx": "return right tag delimeters",
+	})
 	// checking tf in default in switch is too late
 	// doing it now
 
 	if tf != tfCaret && tf != tfGraphite && tf != tfURI && tf != tfPretty {
-		log.Printf("Error - tagsDelims: Unknown tag format %d. Setting to default = %d", tf, tfDefault)
+		logCtx.WithField("after", "check delim type").Errorf("Unknown tag format %d. Setting to default = %d", tf, tfDefault)
 		tf = tfDefault
 	}
 	switch tf {
@@ -138,11 +142,7 @@ func normalizeTags(t map[string]string, tf uint) string {
 }
 
 func parseExtraTags(tagsStr string) (map[string]string, error) {
-	// Only last error is returned
-	// It is the caller responsiblity to use this error or ignore
-	var err error
 
-	err = nil
 	tags := make(map[string]string)
 
 	tagsSlice := strings.Split(tagsStr, " ")
@@ -153,13 +153,12 @@ func parseExtraTags(tagsStr string) (map[string]string, error) {
 	for _, e := range tagsSlice {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			err = fmt.Errorf("Error: invalid tag format %v (%v)", tagsSlice[1:], tagsSlice)
-			log.Printf("%s", err)
-		} else {
-			tags[strings.TrimSpace(tagAndVal[0])] = strings.TrimSpace(tagAndVal[1])
+			return make(map[string]string), fmt.Errorf("Invalid tag format %v (%v)", tagsSlice[1:], tagsSlice)
 		}
+		tags[strings.TrimSpace(tagAndVal[0])] = strings.TrimSpace(tagAndVal[1])
+
 	}
-	return tags, err
+	return tags, nil
 }
 func parseBucketAndTags(name string) (string, map[string]string, error) {
 	// split name in format
@@ -167,8 +166,13 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	// this function can be extended for new "combined" formats
 	// FIXME : add other formats
 
+	logCtx := log.WithFields(log.Fields{
+		"in":  "parseBucketAndTags",
+		"ctx": "split name to bucket and tags map",
+	})
+
 	tags := make(map[string]string)
-	// Caret delim is the same for fiest delim and the others
+	// Caret delim is the same for first delim and the others
 	tfCaretDelim := tfCaretFirstDelim
 
 	tagsSlice := strings.Split(name, tfCaretDelim)
@@ -178,7 +182,7 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	for _, e := range tagsSlice[1:] {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			log.Printf("Error: invalid tag format [%s] %v ", name, tagsSlice[1:])
+			logCtx.WithField("after", "tag split").Errorf("Invalid tag format [%s] %v ", name, tagsSlice[1:])
 		} else {
 			tags[tagAndVal[0]] = tagAndVal[1]
 		}

@@ -45,6 +45,11 @@ func NewParser(reader io.Reader, partialReads bool) *MsgParser {
 // Next - for reading whole meter data from packet
 // return *Packet parsed from raw data
 func (mp *MsgParser) Next() (*Packet, bool) {
+
+	logCtx := log.WithFields(log.Fields{
+		"in":  "MsgParser Next",
+		"ctx": "Parse packet",
+	})
 	buf := mp.buffer
 
 	for {
@@ -78,7 +83,7 @@ func (mp *MsgParser) Next() (*Packet, bool) {
 		buf = buf[:idx+n]
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("ERROR: %s", err)
+				logCtx.WithField("after", "Read").Errorf("%s", err)
 			}
 
 			mp.done = true
@@ -120,15 +125,18 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 
 func parseLine(line []byte) *Packet {
 
+	logCtx := log.WithFields(log.Fields{
+		"in":  "parseLine",
+		"ctx": "Parse packet",
+	})
+
 	tags := make(map[string]string)
 
-	if Config.Debug {
-		log.Printf("DEBUG: Input packet line: %s", string(line))
-	}
+	logCtx.WithField("after", "parseLine").Debugf("Input packet line: %s", string(line))
 
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
-		logParseFail(line)
+		logCtx.WithField("after", "parseLine").Errorf("Failed to parse line: %s", line)
 		return nil
 	}
 
@@ -140,11 +148,7 @@ func parseLine(line []byte) *Packet {
 		if len(split) == 3 && len(split[2]) > 0 && split[2][0] == '@' {
 			f64, err := strconv.ParseFloat(string(split[2][1:]), 32)
 			if err != nil {
-				log.Printf(
-					"ERROR: failed to ParseFloat %s - %s",
-					string(split[2][1:]),
-					err,
-				)
+				logCtx.WithField("after", "ParseFloat").Errorf("Failed to ParseFloat %s - %s", string(split[2][1:]), err)
 				return nil
 			}
 			sampling = float32(f64)
@@ -153,14 +157,14 @@ func parseLine(line []byte) *Packet {
 
 	split = bytes.SplitN(keyval, []byte{':'}, 2)
 	if len(split) < 2 {
-		logParseFail(line)
+		logCtx.WithField("after", "parseLine").Errorf("Failed to parse line: %s", line)
 		return nil
 	}
 	// raw bucket name from line
 	name := string(split[0])
 	val := split[1]
 	if len(val) == 0 {
-		logParseFail(line)
+		logCtx.WithField("after", "parseLine").Errorf("Failed to parse line: %s", line)
 		return nil
 	}
 
@@ -175,7 +179,7 @@ func parseLine(line []byte) *Packet {
 	case "c":
 		value, err = strconv.ParseInt(string(val), 10, 64)
 		if err != nil {
-			log.Printf("ERROR: failed to ParseInt %s - %s", string(val), err)
+			logCtx.WithField("after", "Counter - ParseInt").Errorf("Failed to ParseInt %s - %s", string(val), err)
 			return nil
 		}
 	case "g":
@@ -199,7 +203,7 @@ func parseLine(line []byte) *Packet {
 
 		value, err = strconv.ParseFloat(s, 64)
 		if err != nil {
-			log.Printf("ERROR: Gauge - failed to ParseFloat %s - %s", string(val), err)
+			logCtx.WithField("after", "Gauge - ParseFloat").Errorf("Failed to ParseFloat %s - %s", string(val), err)
 			return nil
 		}
 
@@ -209,19 +213,20 @@ func parseLine(line []byte) *Packet {
 	case "ms":
 		value, err = strconv.ParseFloat(string(val), 64)
 		if err != nil {
-			log.Printf("ERROR: Timer - failed to ParseFloat %s - %s", string(val), err)
+			logCtx.WithField("after", "Timer - ParseFloat").Errorf("Failed to ParseFloat %s - %s", string(val), err)
 			return nil
 		}
 	case "kv":
 		value = string(val) // Key/value should not need transformation
 	default:
-		log.Printf("ERROR: unrecognized type code %q", typeCode)
+		logCtx.WithField("after", "default").Errorf("Unrecognized type code %q", typeCode)
 		return nil
 	}
+
 	// parse tags from bucket name
 	cleanBucket, tags, err = parseBucketAndTags(string(name))
 	if err != nil {
-		log.Printf("ERROR: problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
+		logCtx.WithField("after", "parseBucketAndTags").Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
 		return nil
 	}
 
@@ -240,12 +245,6 @@ func parseLine(line []byte) *Packet {
 		Tags:        tags,
 		Modifier:    typeCode,
 		Sampling:    sampling,
-	}
-}
-
-func logParseFail(line []byte) {
-	if Config.Debug {
-		log.Printf("ERROR: failed to parse line: %q\n", string(line))
 	}
 }
 

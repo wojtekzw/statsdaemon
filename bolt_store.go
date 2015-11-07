@@ -22,24 +22,40 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 	err := db.Update(func(tx *bolt.Tx) error {
 		bucket, err := tx.CreateBucketIfNotExists([]byte(bucketName))
 		if err != nil {
-			log.Printf("Error - storeCounter - CreateBucketIfNotExists : %s", err)
+			log.WithFields(log.Fields{
+				"in":    "Update",
+				"after": "CreateBucketIfNotExists",
+				"ctx":   "Save in Bolt",
+			}).Errorf("%s", err)
 			return err
 		}
 		jsonPoint, err = json.Marshal(mp)
 		if err != nil {
-			log.Printf("Error - storeCounter - json: %s", err)
+			log.WithFields(log.Fields{
+				"in":    "Update",
+				"after": "Marshal",
+				"ctx":   "Save in Bolt",
+			}).Errorf("%s", err)
 			return err
 		}
 		err = bucket.Put([]byte(name), jsonPoint)
 		if err != nil {
-			log.Printf("Error - storeCounter - Put: %s", err)
+			log.WithFields(log.Fields{
+				"in":    "Update",
+				"after": "Put",
+				"ctx":   "Save in Bolt",
+			}).Errorf("%s", err)
 			return err
 		}
 		return nil
 	})
 
 	if err != nil {
-		log.Printf("Error - storeCounter: %s", err)
+		log.WithFields(log.Fields{
+			"in":    "storeMeasurePoint",
+			"after": "Update",
+			"ctx":   "Save in Bolt",
+		}).Errorf("%s", err)
 		return err
 	}
 	return nil
@@ -63,7 +79,11 @@ func readMeasurePoint(db *bolt.DB, bucketName string, name string) (MeasurePoint
 
 		err := json.Unmarshal(valBuf, &outMeasurePoint)
 		if err != nil {
-			log.Printf("Error reading counters: %v", err)
+			log.WithFields(log.Fields{
+				"in":    "readMeasurePoint",
+				"after": "Unmarshal",
+				"ctx":   "Read from Bolt",
+			}).Errorf("%s", err)
 			return err
 		}
 		return nil

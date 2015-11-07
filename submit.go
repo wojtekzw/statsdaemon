@@ -2,9 +2,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
-	"net"
-	"os"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -13,9 +10,14 @@ import (
 func submit(deadline time.Time, backend string) error {
 	var buffer bytes.Buffer
 	var num int64
-	now := time.Now().Unix()
 
-	fmt.Printf("Len size - start submit: %d\n", len(In))
+	now := time.Now().Unix()
+	logCtx := log.WithFields(log.Fields{
+		"in":  "submit",
+		"ctx": "Buffer send to backend",
+	})
+
+	// fmt.Printf("Len size - start submit: %d\n", len(In))
 	// Universal format in buffer
 	num += processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
 	num += processGauges(&buffer, now, backend)
@@ -32,7 +34,7 @@ func submit(deadline time.Time, backend string) error {
 			if len(line) == 0 {
 				continue
 			}
-			log.Printf("DEBUG: Output line: %s", line)
+			logCtx.WithField("after", "Processing metrics").Debugf("Output line: %s", line)
 		}
 	}
 
@@ -42,44 +44,32 @@ func submit(deadline time.Time, backend string) error {
 		if Config.PostFlushCmd != "stdout" {
 			err := sendDataExtCmd(Config.PostFlushCmd, &buffer)
 			if err != nil {
-				log.Printf(err.Error())
+				logCtx.WithField("after", "sendDataExtCmd").Errorf("%s", err)
 			}
-			log.Printf("sent %d stats to external command", num)
+			logCtx.WithField("after", "sendDataExtCmd").Infof("sent %d stats to external command", num)
 		} else {
 			if err := sendDataStdout(&buffer); err != nil {
-				log.Printf(err.Error())
+				logCtx.WithField("after", "sendDataStdout").Errorf("%s", err)
 			}
 		}
 
 	case "graphite":
-		client, err := net.Dial("tcp", Config.GraphiteAddress)
+		err := graphite(Config, deadline, &buffer)
 		if err != nil {
-			return fmt.Errorf("dialing %s failed - %s", Config.GraphiteAddress, err)
+			logCtx.WithField("after", "graphite").Errorf("%s", err)
 		}
-		defer client.Close()
-
-		err = client.SetDeadline(deadline)
-		if err != nil {
-			return err
-		}
-
-		_, err = client.Write(buffer.Bytes())
-		if err != nil {
-			return fmt.Errorf("failed to write stats to graphite: %s", err)
-		}
-		log.Printf("wrote %d stats to graphite(%s)", num, Config.GraphiteAddress)
+		logCtx.WithField("after", "graphite").Infof("wrote %d stats to graphite(%s)", num, Config.GraphiteAddress)
 
 	case "opentsdb":
-		err := openTSDB(Config.OpenTSDBAddress, &buffer, Config.Debug)
+		err := openTSDB(Config, &buffer)
 		if err != nil {
-			log.Printf("Error writing to OpenTSDB: %v\n", err)
+			logCtx.WithField("after", "openTSDB").Errorf("%s", err)
 		}
 
 	default:
-		log.Printf("%v", fmt.Errorf("Invalid backend %s. Exiting...\n", backend))
-		os.Exit(1)
+		logCtx.WithField("after", "graphite").Fatalf("Invalid backend %s. Exiting...\n", backend)
 	}
 
-	fmt.Printf("Len size - end submit: %d\n", len(In))
+	// fmt.Printf("Len size - end submit: %d\n", len(In))
 	return nil
 }
