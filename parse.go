@@ -5,9 +5,10 @@ package main
 import (
 	"bytes"
 	"io"
-	"log"
 	"strconv"
 	"strings"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 // GaugeData - struct for gauges :)
@@ -226,10 +227,10 @@ func parseLine(line []byte) *Packet {
 
 	// bucket is set to a name WITH tags
 	firstDelim := ""
-	if len(tags) > 0 {
+	if len(tags) > 0 || len(Config.ExtraTagsHash) > 0 {
 		firstDelim, _, _ = tagsDelims(tfDefault)
 	}
-	bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tags, Config.ExtraTagsHash), tfDefault) + Config.Postfix
+	bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tags, Config.ExtraTagsHash), tfDefault)
 
 	return &Packet{
 		Bucket:      bucket,

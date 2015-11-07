@@ -2,17 +2,19 @@
 udp-addr: :8125
 tcp-addr: ""
 max-udp-packet-size: 1472
-backend-type: external
+backend-type: opentsdb
 post-flush-cmd: stdout
 graphite: 127.0.0.1:2003
-opentsdb: 127.0.0.1:4242
+#opentsdb: 104.160.66.254:4242
+opentsdb: localhost:4243
 flush-interval: 10
 debug: false
 delete-gauges: true
-reset-counters: true
+reset-counters: false
 persist-count-keys: 0
 receive-counter: statsdaemon.metrics.count
 store-db: /tmp/statsdaemon.db
-prefix: ""
-extra-tags: ""
+prefix: st.
+#extra-tags: "cwz=ola zwz=cos dwz=ex"
+extra-tags: "cwz=ala"
 log-name: stdout

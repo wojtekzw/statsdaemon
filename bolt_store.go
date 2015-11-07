@@ -2,7 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/boltdb/bolt"
 )

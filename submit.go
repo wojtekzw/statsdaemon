@@ -3,10 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"time"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func submit(deadline time.Time, backend string) error {
@@ -14,6 +15,7 @@ func submit(deadline time.Time, backend string) error {
 	var num int64
 	now := time.Now().Unix()
 
+	fmt.Printf("Len size - start submit: %d\n", len(In))
 	// Universal format in buffer
 	num += processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
 	num += processGauges(&buffer, now, backend)
@@ -78,5 +80,6 @@ func submit(deadline time.Time, backend string) error {
 		os.Exit(1)
 	}
 
+	fmt.Printf("Len size - end submit: %d\n", len(In))
 	return nil
 }

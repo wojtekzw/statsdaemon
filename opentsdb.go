@@ -5,10 +5,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/mapmyfitness/go-opentsdb/tsdb"
 )
 
@@ -96,11 +96,11 @@ func openTSDB(openTSDBAddress string, buffer *bytes.Buffer, debug bool) error {
 		}
 
 		TSDB.Servers = append(TSDB.Servers, server)
-		resp, err := TSDB.Put(datapoints)
+		_, err = TSDB.Put(datapoints)
 		if err != nil {
 			return err
 		}
-		log.Printf("sent %d stats to %s (reponse: \"%v\")", num, openTSDBAddress, resp)
+		log.Printf("sent %d stats to %s", num, openTSDBAddress)
 
 		return nil
 

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
+
 	"net"
 	"os"
 	"os/signal"
@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 	"github.com/jinzhu/configor"
 	flag "github.com/ogier/pflag"
@@ -19,7 +20,7 @@ import (
 
 // Network constants & dbName
 const (
-	maxUnprocessedPackets = 1000
+	maxUnprocessedPackets = 10000
 
 	tcpReadSize        = 4096
 	maxUDPPacket       = 1472
@@ -54,7 +55,6 @@ type ConfigApp struct {
 	ReceiveCounter    string      `yaml:"receive-counter"`
 	StoreDb           string      `yaml:"store-db"`
 	Prefix            string      `yaml:"prefix"`
-	Postfix           string      `yaml:"postfix"`
 	ExtraTags         string      `yaml:"extra-tags"`
 	PercentThreshold  Percentiles `yaml:"-"` // `yaml:"percent-threshold,omitempty"`
 	PrintConfig       bool        `yaml:"-"`
@@ -74,6 +74,7 @@ var (
 )
 
 func readConfig(parse bool) {
+	var err error
 	// Set defaults
 	ConfigYAML.UDPServiceAddress = defaultUDPServiceAddress
 	ConfigYAML.TCPServiceAddress = defaultTCPServiceAddress
@@ -91,7 +92,6 @@ func readConfig(parse bool) {
 	ConfigYAML.ReceiveCounter = receiveCounterName
 	ConfigYAML.StoreDb = dbPath
 	ConfigYAML.Prefix = ""
-	ConfigYAML.Postfix = ""
 	ConfigYAML.ExtraTags = ""
 	ConfigYAML.PercentThreshold = Percentiles{}
 	ConfigYAML.PrintConfig = false
@@ -114,8 +114,7 @@ func readConfig(parse bool) {
 	flag.StringVar(&Config.ReceiveCounter, "receive-counter", ConfigYAML.ReceiveCounter, "Metric name for total metrics received per interval (no prefix,postfix added, only extra-tags)")
 	flag.StringVar(&Config.StoreDb, "store-db", ConfigYAML.StoreDb, "Name of database for permanent counters storage (for conversion from rate to counter)")
 	flag.StringVar(&Config.Prefix, "prefix", ConfigYAML.Prefix, "Prefix for all stats")
-	flag.StringVar(&Config.Postfix, "postfix", ConfigYAML.Postfix, "Postfix for all stats")
-	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1,tag2=value2")
+	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1 tag2=value2")
 	// flag.Var(&Config.PercentThreshold, "percent-threshold", "Percentile calculation for timers (0-100, may be given multiple times)")
 	flag.BoolVar(&Config.PrintConfig, "print-config", ConfigYAML.PrintConfig, "Print config in YAML format")
 	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If empty or \"stdout\" than logs to stdout")
@@ -127,13 +126,13 @@ func readConfig(parse bool) {
 	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
 
 	if len(*configFile) > 0 {
-		if _, err := os.Stat(*configFile); os.IsNotExist(err) {
+		if _, err = os.Stat(*configFile); os.IsNotExist(err) {
 			fmt.Printf("# Warning: No config file: %s\n", *configFile)
 			*configFile = ""
 		}
 
 		if len(*configFile) > 0 {
-			err := configor.Load(&ConfigYAML, *configFile)
+			err = configor.Load(&ConfigYAML, *configFile)
 			if err != nil {
 				fmt.Printf("Error loading config file: %s\n", err)
 			} else {
@@ -160,7 +159,11 @@ func readConfig(parse bool) {
 	}
 
 	// calculate extraFlags hash
-	Config.ExtraTagsHash = parseTags(Config.ExtraTags)
+	Config.ExtraTagsHash, err = parseExtraTags(Config.ExtraTags)
+	if err != nil {
+		fmt.Printf("Extra Tags: \"%s\" - %s\n", Config.ExtraTags, err)
+		os.Exit(1)
+	}
 	firstDelim := ""
 	if len(Config.ExtraTagsHash) > 0 {
 		firstDelim, _, _ = tagsDelims(tfDefault)

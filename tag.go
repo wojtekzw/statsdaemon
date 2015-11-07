@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lunny/log"
+	log "github.com/Sirupsen/logrus"
 )
 
 // tag form types
@@ -137,24 +137,29 @@ func normalizeTags(t map[string]string, tf uint) string {
 	return tagsToSortedSlice(t).StringType(tf)
 }
 
-func parseTags(tagsStr string) map[string]string {
+func parseExtraTags(tagsStr string) (map[string]string, error) {
+	// Only last error is returned
+	// It is the caller responsiblity to use this error or ignore
+	var err error
 
+	err = nil
 	tags := make(map[string]string)
 
-	tagsSlice := strings.Split(tagsStr, ",")
+	tagsSlice := strings.Split(tagsStr, " ")
 	if len(tagsSlice) == 1 && tagsSlice[0] == "" {
 		// it's OK to have empty tags
-		return tags
+		return tags, nil
 	}
 	for _, e := range tagsSlice {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			log.Printf("Error: invalid tag format %v (%v) ", tagsSlice[1:], tagsSlice)
+			err = fmt.Errorf("Error: invalid tag format %v (%v)", tagsSlice[1:], tagsSlice)
+			log.Printf("%s", err)
 		} else {
 			tags[strings.TrimSpace(tagAndVal[0])] = strings.TrimSpace(tagAndVal[1])
 		}
 	}
-	return tags
+	return tags, err
 }
 func parseBucketAndTags(name string) (string, map[string]string, error) {
 	// split name in format

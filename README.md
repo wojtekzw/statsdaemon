@@ -71,7 +71,6 @@ Usage of ./statsdaemon:
       --opentsdb="127.0.0.1:4242": OpenTSDB service address
       --persist-count-keys=0: Number of flush-intervals to persist count keys
       --post-flush-cmd="stdout": Command to run on each flush
-      --postfix="": Postfix for all stats
       --prefix="": Prefix for all stats
       --print-config=false: Print config in YAML format
       --receive-counter="statsdaemon.metrics.count": Metric name for total metrics received per interval (no prefix,postfix added, only extra-tags)

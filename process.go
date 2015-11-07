@@ -3,11 +3,11 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math"
 	"reflect"
 	"sort"
 
+	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 )
 
@@ -106,7 +106,7 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 
 	sep := ""
 	sepTags := ""
-	if len(tags) > 0 {
+	if len(tags) > 0 || len(Config.ExtraTagsHash) > 0 {
 		sep = tfGraphiteFirstDelim
 		sepTags = " "
 	}
@@ -122,6 +122,7 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	default:
 		ret = ""
 	}
+	fmt.Printf("DEBUG-BACKEND:%s\n", ret)
 	return ret
 }
 
@@ -270,8 +271,12 @@ func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend string) int64 {
 	// FIXME - chceck float64 conversion
 	var num int64
+
+	// strExtraTags := normalizeTags(Config.ExtraTagsHash, tfDefault)
+	// lenExtraTags := len(strExtraTags)
 	for bucket, timer := range timers {
-		bucketWithoutPostfix := bucket[:len(bucket)-len(Config.Postfix)]
+		// log.Printf("TIMERS: bucket=(%s) timer=(%s) lenExtraTags=(%d) strExtraTags=(%s)\n", bucket, timer, lenExtraTags, strExtraTags)
+		bucketWithoutPostfix := bucket
 		num++
 
 		sort.Sort(timer)
@@ -291,6 +296,8 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		if err != nil {
 			log.Printf("Error parse - processTimers: %v", err)
 		}
+		fullNormalizedTags := normalizeTags(addTags(tags, Config.ExtraTagsHash), tfDefault)
+
 		for _, pct := range pctls {
 			if len(timer) > 1 {
 				var abs float64
@@ -312,34 +319,30 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 			var pctstr string
 			if pct.float >= 0 {
 				// tmpl = "%s.upper_%s%s %f %d\n"
-				tmpl = "%s.upper_%s%s%s%s"
+				tmpl = "%s.upper_%s%s%s"
 				pctstr = pct.str
 			} else {
 				// tmpl = "%s.lower_%s%s %f %d\n"
-				tmpl = "%s.lower_%s%s%s%s"
+				tmpl = "%s.lower_%s%s%s"
 				pctstr = pct.str[1:]
 			}
-			// fmt.Fprintf(buffer, tmpl, bucketWithoutPostfix, pctstr, Config.Postfix, maxAtThreshold, now)
 			sep := ""
-			if len(tags) > 0 {
+			if len(fullNormalizedTags) > 0 {
 				sep = ".^"
 			}
-			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, sep, normalizeTags(tags, tfDefault), Config.Postfix), maxAtThreshold, now, backend))
+
+			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf(tmpl, cleanBucket, pctstr, sep, fullNormalizedTags), maxAtThreshold, now, backend))
 		}
 
-		// fmt.Fprintf(buffer, "%s.mean%s %f %d\n", bucketWithoutPostfix, Config.Postfix, mean, now)
-		// fmt.Fprintf(buffer, "%s.upper%s %f %d\n", bucketWithoutPostfix, Config.Postfix, max, now)
-		// fmt.Fprintf(buffer, "%s.lower%s %f %d\n", bucketWithoutPostfix, Config.Postfix, min, now)
-		// fmt.Fprintf(buffer, "%s.count%s %d %d\n", bucketWithoutPostfix, Config.Postfix, count, now)
-		sTags := normalizeTags(tags, tfDefault)
+		sTags := fullNormalizedTags
 		if len(sTags) > 0 {
 			sTags = ".^" + sTags
 		}
 
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.mean%s%s", cleanBucket, sTags, Config.Postfix), mean, now, backend))
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.upper%s%s", cleanBucket, sTags, Config.Postfix), max, now, backend))
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s%s", cleanBucket, sTags, Config.Postfix), min, now, backend))
-		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s%s", cleanBucket, sTags, Config.Postfix), count, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.mean%s", cleanBucket, sTags), mean, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.upper%s", cleanBucket, sTags), max, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s", cleanBucket, sTags), min, now, backend))
+		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s", cleanBucket, sTags), count, now, backend))
 		delete(timers, bucket)
 		delete(tags, bucket)
 	}
