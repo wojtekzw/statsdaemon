@@ -27,6 +27,7 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 				"after": "CreateBucketIfNotExists",
 				"ctx":   "Save in Bolt",
 			}).Errorf("%s", err)
+			Stat.ErrorIncr()
 			return err
 		}
 		jsonPoint, err = json.Marshal(mp)
@@ -36,6 +37,7 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 				"after": "Marshal",
 				"ctx":   "Save in Bolt",
 			}).Errorf("%s", err)
+			Stat.ErrorIncr()
 			return err
 		}
 		err = bucket.Put([]byte(name), jsonPoint)
@@ -45,6 +47,7 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 				"after": "Put",
 				"ctx":   "Save in Bolt",
 			}).Errorf("%s", err)
+			Stat.ErrorIncr()
 			return err
 		}
 		return nil
@@ -56,6 +59,7 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 			"after": "Update",
 			"ctx":   "Save in Bolt",
 		}).Errorf("%s", err)
+		Stat.ErrorIncr()
 		return err
 	}
 	return nil
@@ -84,6 +88,7 @@ func readMeasurePoint(db *bolt.DB, bucketName string, name string) (MeasurePoint
 				"after": "Unmarshal",
 				"ctx":   "Read from Bolt",
 			}).Errorf("%s", err)
+			Stat.ErrorIncr()
 			return err
 		}
 		return nil

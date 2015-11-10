@@ -51,6 +51,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				if err != nil {
 					// continue on error in one metric
 					logCtx.WithField("after", "ParseFloat").Errorf("Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
+					Stat.ErrorIncr()
 					continue
 				}
 				value.Set(val)
@@ -59,6 +60,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				err = timestamp.Parse(data[2])
 				if err != nil {
 					logCtx.WithField("after", "Parse").Errorf("Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
+					Stat.ErrorIncr()
 					continue
 				}
 
@@ -67,6 +69,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				err = metric.Set(metricName)
 				if err != nil {
 					logCtx.WithField("after", "Set").Errorf("Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
+					Stat.ErrorIncr()
 					continue
 				}
 
@@ -78,6 +81,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 							if len(strSlice) == 2 {
 								if strSlice[0] == "" || strSlice[1] == "" {
 									logCtx.WithField("after", "Split").Errorf("Tag  expected. Got: %s in line \"%s\"", e, data)
+									Stat.ErrorIncr()
 									continue
 								}
 								tags.Set(strSlice[0], strSlice[1])
@@ -93,6 +97,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				datapoints = append(datapoints, datapoint)
 			} else {
 				logCtx.WithField("after", "Split").Errorf("Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
+				Stat.ErrorIncr()
 			}
 
 		}

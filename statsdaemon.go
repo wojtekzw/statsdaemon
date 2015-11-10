@@ -74,6 +74,7 @@ var (
 	configFile *string
 	Config     = ConfigApp{}
 	ConfigYAML = ConfigApp{}
+	Stat       = DaemonStat{}
 
 	signalchan chan os.Signal // for signal exits
 )
@@ -108,7 +109,7 @@ func readConfig(parse bool) {
 	flag.StringVar(&Config.UDPServiceAddress, "udp-addr", ConfigYAML.UDPServiceAddress, "UDP listen service address")
 	flag.StringVar(&Config.TCPServiceAddress, "tcp-addr", ConfigYAML.TCPServiceAddress, "TCP listen service address, if set")
 	flag.Int64Var(&Config.MaxUDPPacketSize, "max-udp-packet-size", ConfigYAML.MaxUDPPacketSize, "Maximum UDP packet size")
-	flag.StringVar(&Config.BackendType, "backend-type", ConfigYAML.BackendType, "MANDATORY: Backend to use: graphite, opentsdb, external")
+	flag.StringVar(&Config.BackendType, "backend-type", ConfigYAML.BackendType, "MANDATORY: Backend to use: graphite, opentsdb, external, dummy")
 	flag.StringVar(&Config.PostFlushCmd, "post-flush-cmd", ConfigYAML.PostFlushCmd, "Command to run on each flush")
 	flag.StringVar(&Config.GraphiteAddress, "graphite", ConfigYAML.GraphiteAddress, "Graphite service address")
 	flag.StringVar(&Config.OpenTSDBAddress, "opentsdb", ConfigYAML.OpenTSDBAddress, "OpenTSDB service address")
@@ -124,7 +125,7 @@ func readConfig(parse bool) {
 	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1 tag2=value2")
 	// flag.Var(&Config.PercentThreshold, "percent-threshold", "Percentile calculation for timers (0-100, may be given multiple times)")
 	flag.BoolVar(&Config.PrintConfig, "print-config", ConfigYAML.PrintConfig, "Print config in YAML format")
-	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If empty or \"stdout\" than logs to stdout")
+	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If \"stdout\" than logs to stdout.If empty logs go to /dev/null")
 	flag.BoolVar(&Config.LogToSyslog, "log-to-syslopg", ConfigYAML.LogToSyslog, "Log to syslog")
 	flag.StringVar(&Config.SyslogUDPAddress, "syslog-udp-address", ConfigYAML.SyslogUDPAddress, "Syslog address with port number eg. localhost:514")
 	if parse {
@@ -179,17 +180,12 @@ func readConfig(parse bool) {
 	}
 	Config.ReceiveCounterWithTags = Config.ReceiveCounter + firstDelim + normalizeTags(Config.ExtraTagsHash, tfDefault)
 
-	// Normalize LogName
-	if Config.LogName == "" {
-		Config.LogName = "stdout"
-	}
 	// Set InternalLogLevel
 	Config.InternalLogLevel, err = log.ParseLevel(Config.LogLevel)
 	if err != nil {
 		fmt.Printf("Invalid log level: \"%s\"\n", Config.LogLevel)
 		os.Exit(1)
 	}
-	log.SetLevel(Config.InternalLogLevel)
 
 }
 
@@ -229,29 +225,39 @@ func main() {
 		os.Exit(0)
 	}
 
+	log.SetLevel(Config.InternalLogLevel)
+
 	if Config.LogName == "stdout" {
 		log.SetOutput(os.Stdout)
 	} else {
-		logFile, err := os.OpenFile(Config.LogName, os.O_WRONLY|os.O_CREATE, 0640)
-		if err != nil {
-			fmt.Printf("Error opennig log file: %s\n", err)
-			os.Exit(1)
+		if len(Config.LogName) > 0 {
+			logFile, err := os.OpenFile(Config.LogName, os.O_WRONLY|os.O_CREATE, 0640)
+			if err != nil {
+				fmt.Printf("Error opennig log file: %s\n", err)
+				os.Exit(1)
+			}
+			log.SetOutput(logFile)
 		}
-		log.SetOutput(logFile)
 	}
 
 	if Config.LogToSyslog && len(Config.SyslogUDPAddress) > 0 {
 		// set syslog
 		hook, err := logrus_syslog.NewSyslogHook("udp", Config.SyslogUDPAddress, syslog.LOG_DEBUG|syslog.LOG_LOCAL3, "statsdaemon")
 		if err != nil {
-			fmt.Printf("Unable to connect to local syslog daemon: %s\n", err)
+			fmt.Printf("Unable to connect to syslog daemon: %s\n", err)
 		} else {
 			log.AddHook(hook)
 			log.SetFormatter(&log.JSONFormatter{})
-			nullWriter := new(NullWriter)
-			log.SetOutput(nullWriter)
 		}
 	}
+
+	if Config.LogName == "" {
+		nullWriter := new(NullWriter)
+		log.SetOutput(nullWriter)
+	}
+
+	// Stat
+	Stat.Interval = Config.FlushInterval
 
 	signalchan = make(chan os.Signal, 1)
 	signal.Notify(signalchan, syscall.SIGTERM, syscall.SIGQUIT)
@@ -264,7 +270,7 @@ func main() {
 			"ctx":   "Bolt DB open",
 		}).Fatalf("%s", err)
 	}
-	// dbHandle.NoSync = true
+	dbHandle.NoSync = true
 
 	defer dbHandle.Close()
 
@@ -281,7 +287,7 @@ func validateConfig() error {
 	if Config.BackendType == "" && !doNotCheckBackend {
 		return fmt.Errorf("Parameter error: backend-type can't be empty")
 	}
-	if Config.BackendType != "external" && Config.BackendType != "graphite" && Config.BackendType != "opentsdb" && !doNotCheckBackend {
+	if Config.BackendType != "external" && Config.BackendType != "graphite" && Config.BackendType != "opentsdb" && Config.BackendType != "dummy" && !doNotCheckBackend {
 		return fmt.Errorf("Parameter error: Invalid backend-type: %s", Config.BackendType)
 	}
 
@@ -364,11 +370,13 @@ func monitor() {
 			logCtx.WithField("after", "signal").Infof("Caught signal \"%v\"... shutting down", sig)
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
 				logCtx.Errorf("%s", err)
+				Stat.ErrorIncr()
 			}
 			return
 		case <-ticker.C:
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
 				logCtx.Errorf("%s", err)
+				Stat.ErrorIncr()
 			}
 		case s := <-In:
 			packetHandler(s)

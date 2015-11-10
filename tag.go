@@ -58,6 +58,7 @@ func tagsDelims(tf uint) (string, string, string) {
 
 	if tf != tfCaret && tf != tfGraphite && tf != tfURI && tf != tfPretty {
 		logCtx.WithField("after", "check delim type").Errorf("Unknown tag format %d. Setting to default = %d", tf, tfDefault)
+		Stat.ErrorIncr()
 		tf = tfDefault
 	}
 	switch tf {
@@ -182,6 +183,7 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 
 	if strings.IndexAny(tagsSlice[0], "=^") > -1 {
 		logCtx.WithField("after", "tag split").Errorf("Format error: Invalid tag format in \"%s\"", name)
+		Stat.ErrorIncr()
 		oldBucket := tagsSlice[0]
 		tagsSlice[0] = sanitizeBucket(tagsSlice[0])
 		logCtx.WithField("after", "sanitizeBucket").Errorf("Format error: Converting bucket name from  \"%s\" to \"%s\"", oldBucket, tagsSlice[0])
@@ -191,6 +193,7 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
 			logCtx.WithField("after", "tag split").Errorf("Invalid tag format [%s] %v ", name, tagsSlice[1:])
+			Stat.ErrorIncr()
 		} else {
 			tags[tagAndVal[0]] = tagAndVal[1]
 		}

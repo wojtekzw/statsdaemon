@@ -84,6 +84,7 @@ func (mp *MsgParser) Next() (*Packet, bool) {
 		if err != nil {
 			if err != io.EOF {
 				logCtx.WithField("after", "Read").Errorf("%s", err)
+				Stat.ErrorIncr()
 			}
 
 			mp.done = true
@@ -137,6 +138,7 @@ func parseLine(line []byte) *Packet {
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
 		logCtx.WithField("after", "parseLine").Errorf("Failed to parse line: %s", line)
+		Stat.ErrorIncr()
 		return nil
 	}
 
@@ -149,6 +151,7 @@ func parseLine(line []byte) *Packet {
 			f64, err := strconv.ParseFloat(string(split[2][1:]), 32)
 			if err != nil {
 				logCtx.WithField("after", "ParseFloat").Errorf("Failed to ParseFloat %s - %s", string(split[2][1:]), err)
+				Stat.ErrorIncr()
 				return nil
 			}
 			sampling = float32(f64)
@@ -158,6 +161,7 @@ func parseLine(line []byte) *Packet {
 	split = bytes.SplitN(keyval, []byte{':'}, 2)
 	if len(split) < 2 {
 		logCtx.WithField("after", "parseLine").Errorf("Failed to parse line: %s", line)
+		Stat.ErrorIncr()
 		return nil
 	}
 	// raw bucket name from line
@@ -165,6 +169,7 @@ func parseLine(line []byte) *Packet {
 	val := split[1]
 	if len(val) == 0 {
 		logCtx.WithField("after", "parseLine").Errorf("Failed to parse line: %s", line)
+		Stat.ErrorIncr()
 		return nil
 	}
 
@@ -180,6 +185,7 @@ func parseLine(line []byte) *Packet {
 		value, err = strconv.ParseInt(string(val), 10, 64)
 		if err != nil {
 			logCtx.WithField("after", "Counter - ParseInt").Errorf("Failed to ParseInt %s - %s", string(val), err)
+			Stat.ErrorIncr()
 			return nil
 		}
 	case "g":
@@ -204,6 +210,7 @@ func parseLine(line []byte) *Packet {
 		value, err = strconv.ParseFloat(s, 64)
 		if err != nil {
 			logCtx.WithField("after", "Gauge - ParseFloat").Errorf("Failed to ParseFloat %s - %s", string(val), err)
+			Stat.ErrorIncr()
 			return nil
 		}
 
@@ -214,12 +221,14 @@ func parseLine(line []byte) *Packet {
 		value, err = strconv.ParseFloat(string(val), 64)
 		if err != nil {
 			logCtx.WithField("after", "Timer - ParseFloat").Errorf("Failed to ParseFloat %s - %s", string(val), err)
+			Stat.ErrorIncr()
 			return nil
 		}
 	case "kv":
 		value = string(val) // Key/value should not need transformation
 	default:
 		logCtx.WithField("after", "default").Errorf("Unrecognized type code %q", typeCode)
+		Stat.ErrorIncr()
 		return nil
 	}
 
@@ -227,6 +236,7 @@ func parseLine(line []byte) *Packet {
 	cleanBucket, tags, err = parseBucketAndTags(string(name))
 	if err != nil {
 		logCtx.WithField("after", "parseBucketAndTags").Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
+		Stat.ErrorIncr()
 		return nil
 	}
 

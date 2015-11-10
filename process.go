@@ -14,6 +14,9 @@ import (
 // packetHandler - process parsed packet and set data in
 // global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
+	// New stat variable
+	Stat.PointIncr()
+
 	if Config.ReceiveCounterWithTags != "" {
 		v, ok := counters[Config.ReceiveCounterWithTags]
 		if !ok || v < 0 {
@@ -102,11 +105,13 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 		val = fmt.Sprintf("%f", value)
 	default:
 		logCtx.WithField("after", "default type").Errorf("Invalid type: %v", reflect.TypeOf(value))
+		Stat.ErrorIncr()
 	}
 
 	cleanBucket, localTags, err := parseBucketAndTags(bucket)
 	if err != nil {
 		logCtx.WithField("after", "parseBucketAndTags").Errorf("%s", err)
+		Stat.ErrorIncr()
 	}
 
 	setFirstGraphite := ""
@@ -150,6 +155,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 			if err != nil {
 				logCtx.WithField("after", "readMeasurePoint").Errorf("%s", err)
+				Stat.ErrorIncr()
 			}
 		} else {
 			startCounter.Value = 0
@@ -169,6 +175,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			err = storeMeasurePoint(dbHandle, bucketName, bucket, nowCounter)
 			if err != nil {
 				logCtx.WithField("after", "storeMeasurePoint").Errorf("%s", err)
+				Stat.ErrorIncr()
 			}
 		}
 		num++
@@ -182,6 +189,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 				startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 				if err != nil {
 					logCtx.WithField("after", "readMeasurePoint").Errorf("%s", err)
+					Stat.ErrorIncr()
 				}
 			} else {
 				startCounter.Value = 0
@@ -298,6 +306,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		cleanBucket, localTags, err := parseBucketAndTags(bucketWithoutPostfix)
 		if err != nil {
 			logCtx.WithField("after", "parseBucketAndTags").Errorf("%s", err)
+			Stat.ErrorIncr()
 		}
 		fullNormalizedTags := normalizeTags(addTags(localTags, Config.ExtraTagsHash), tfDefault)
 
