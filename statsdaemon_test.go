@@ -26,6 +26,9 @@ var commonPercentiles = Percentiles{
 
 func init() {
 	readConfig(false)
+	Config.InternalLogLevel = log.FatalLevel
+	// Config.InternalLogLevel = log.ErrorLevel
+	log.SetLevel(Config.InternalLogLevel)
 }
 
 func removeFile(filename string) {
@@ -42,6 +45,24 @@ func closeAndRemove(db *bolt.DB, filename string) {
 	removeFile(filename)
 }
 
+func TestParseBucketAndTags(t *testing.T) {
+	type testCase struct {
+		l     string
+		valid bool
+	}
+	lines := []testCase{
+		{l: "test.sth.^ala=kot", valid: true},
+		{l: "test.sth^.ala=bad", valid: true},  //sanitized
+		{l: "test.sth.^ala==bad", valid: true}, // check what is OK
+	}
+
+	for _, r := range lines {
+		_, _, err := parseBucketAndTags(r.l)
+		assert.Equal(t, err == nil, r.valid)
+		// fmt.Printf("Bucket:%s\n", bucket)
+	}
+
+}
 func TestRemoveEmptyLines(t *testing.T) {
 	lines := []string{"sth1", "", "sth2", ""}
 	linesOut := removeEmptyLines(lines)

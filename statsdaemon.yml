@@ -7,7 +7,7 @@ post-flush-cmd: stdout
 graphite: 127.0.0.1:2003
 opentsdb: 127.0.0.1:4242
 flush-interval: 10
-debug: false
+log-level: error
 delete-gauges: true
 reset-counters: true
 persist-count-keys: 0
@@ -16,3 +16,5 @@ store-db: /tmp/statsdaemon.db
 prefix: ""
 extra-tags: ""
 log-name: stdout
+log-to-syslog: true
+syslog-udp-address: localhost:514

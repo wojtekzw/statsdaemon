@@ -29,7 +29,7 @@ func submit(deadline time.Time, backend string) error {
 		return nil
 	}
 
-	if Config.Debug {
+	if Config.InternalLogLevel == log.DebugLevel {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
 			if len(line) == 0 {
 				continue

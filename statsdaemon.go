@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log/syslog"
 
 	"net"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
 	"github.com/boltdb/bolt"
 	"github.com/jinzhu/configor"
 	flag "github.com/ogier/pflag"
@@ -47,7 +49,7 @@ type ConfigApp struct {
 	GraphiteAddress   string      `yaml:"graphite"`
 	OpenTSDBAddress   string      `yaml:"opentsdb"`
 	FlushInterval     int64       `yaml:"flush-interval"`
-	Debug             bool        `yaml:"debug"`
+	LogLevel          string      `yaml:"log-level"`
 	ShowVersion       bool        `yaml:"-"`
 	DeleteGauges      bool        `yaml:"delete-gauges"`
 	ResetCounters     bool        `yaml:"reset-counters"`
@@ -59,9 +61,12 @@ type ConfigApp struct {
 	PercentThreshold  Percentiles `yaml:"-"` // `yaml:"percent-threshold,omitempty"`
 	PrintConfig       bool        `yaml:"-"`
 	LogName           string      `yaml:"log-name"`
+	LogToSyslog       bool        `yaml:"log-to-syslog"`
+	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
 	// private - calculated below
 	ExtraTagsHash          map[string]string `yaml:"-"`
 	ReceiveCounterWithTags string            `yaml:"-"`
+	InternalLogLevel       log.Level         `yaml:"-"`
 }
 
 // Global vars for command line flags
@@ -84,7 +89,7 @@ func readConfig(parse bool) {
 	ConfigYAML.GraphiteAddress = defaultGraphiteAddress
 	ConfigYAML.OpenTSDBAddress = defaultOpenTSDBAddress
 	ConfigYAML.FlushInterval = flushInterval
-	ConfigYAML.Debug = false
+	ConfigYAML.LogLevel = "error"
 	ConfigYAML.ShowVersion = false
 	ConfigYAML.DeleteGauges = true
 	ConfigYAML.ResetCounters = true
@@ -96,8 +101,10 @@ func readConfig(parse bool) {
 	ConfigYAML.PercentThreshold = Percentiles{}
 	ConfigYAML.PrintConfig = false
 	ConfigYAML.LogName = "stdout"
+	ConfigYAML.LogToSyslog = true
+	ConfigYAML.SyslogUDPAddress = "localhost:514"
 
-	configFile = flag.String("config", configPath, "Configuration file name (warning not error if not exists)")
+	configFile = flag.String("config", "", "Configuration file name (warning not error if not exists). Standard: "+configPath)
 	flag.StringVar(&Config.UDPServiceAddress, "udp-addr", ConfigYAML.UDPServiceAddress, "UDP listen service address")
 	flag.StringVar(&Config.TCPServiceAddress, "tcp-addr", ConfigYAML.TCPServiceAddress, "TCP listen service address, if set")
 	flag.Int64Var(&Config.MaxUDPPacketSize, "max-udp-packet-size", ConfigYAML.MaxUDPPacketSize, "Maximum UDP packet size")
@@ -106,7 +113,7 @@ func readConfig(parse bool) {
 	flag.StringVar(&Config.GraphiteAddress, "graphite", ConfigYAML.GraphiteAddress, "Graphite service address")
 	flag.StringVar(&Config.OpenTSDBAddress, "opentsdb", ConfigYAML.OpenTSDBAddress, "OpenTSDB service address")
 	flag.Int64Var(&Config.FlushInterval, "flush-interval", ConfigYAML.FlushInterval, "Flush interval (seconds)")
-	flag.BoolVar(&Config.Debug, "debug", ConfigYAML.Debug, "Print statistics sent to backend")
+	flag.StringVar(&Config.LogLevel, "log-level", ConfigYAML.LogLevel, "Set log level (debug,info,warn,error,fatal)")
 	flag.BoolVar(&Config.ShowVersion, "version", ConfigYAML.ShowVersion, "Print version string")
 	flag.BoolVar(&Config.DeleteGauges, "delete-gauges", ConfigYAML.DeleteGauges, "Don't send values to graphite for inactive gauges, as opposed to sending the previous value")
 	flag.BoolVar(&Config.ResetCounters, "reset-counters", ConfigYAML.ResetCounters, "Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)")
@@ -118,7 +125,8 @@ func readConfig(parse bool) {
 	// flag.Var(&Config.PercentThreshold, "percent-threshold", "Percentile calculation for timers (0-100, may be given multiple times)")
 	flag.BoolVar(&Config.PrintConfig, "print-config", ConfigYAML.PrintConfig, "Print config in YAML format")
 	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If empty or \"stdout\" than logs to stdout")
-
+	flag.BoolVar(&Config.LogToSyslog, "log-to-syslopg", ConfigYAML.LogToSyslog, "Log to syslog")
+	flag.StringVar(&Config.SyslogUDPAddress, "syslog-udp-address", ConfigYAML.SyslogUDPAddress, "Syslog address with port number eg. localhost:514")
 	if parse {
 		flag.Parse()
 	}
@@ -164,15 +172,24 @@ func readConfig(parse bool) {
 		fmt.Printf("Extra Tags: \"%s\" - %s\n", Config.ExtraTags, err)
 		os.Exit(1)
 	}
+	// calculate bucket name ReceiveCounterWithTags
 	firstDelim := ""
 	if len(Config.ExtraTagsHash) > 0 {
 		firstDelim, _, _ = tagsDelims(tfDefault)
 	}
 	Config.ReceiveCounterWithTags = Config.ReceiveCounter + firstDelim + normalizeTags(Config.ExtraTagsHash, tfDefault)
 
+	// Normalize LogName
 	if Config.LogName == "" {
 		Config.LogName = "stdout"
 	}
+	// Set InternalLogLevel
+	Config.InternalLogLevel, err = log.ParseLevel(Config.LogLevel)
+	if err != nil {
+		fmt.Printf("Invalid log level: \"%s\"\n", Config.LogLevel)
+		os.Exit(1)
+	}
+	log.SetLevel(Config.InternalLogLevel)
 
 }
 
@@ -221,6 +238,19 @@ func main() {
 			os.Exit(1)
 		}
 		log.SetOutput(logFile)
+	}
+
+	if Config.LogToSyslog && len(Config.SyslogUDPAddress) > 0 {
+		// set syslog
+		hook, err := logrus_syslog.NewSyslogHook("udp", Config.SyslogUDPAddress, syslog.LOG_DEBUG|syslog.LOG_LOCAL3, "statsdaemon")
+		if err != nil {
+			fmt.Printf("Unable to connect to local syslog daemon: %s\n", err)
+		} else {
+			log.AddHook(hook)
+			log.SetFormatter(&log.JSONFormatter{})
+			nullWriter := new(NullWriter)
+			log.SetOutput(nullWriter)
+		}
 	}
 
 	signalchan = make(chan os.Signal, 1)

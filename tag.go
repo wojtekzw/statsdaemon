@@ -168,7 +168,7 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 
 	logCtx := log.WithFields(log.Fields{
 		"in":  "parseBucketAndTags",
-		"ctx": "split name to bucket and tags map",
+		"ctx": "parsePacket",
 	})
 
 	tags := make(map[string]string)
@@ -179,6 +179,14 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	if len(tagsSlice) == 0 || tagsSlice[0] == "" {
 		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
 	}
+
+	if strings.IndexAny(tagsSlice[0], "=^") > -1 {
+		logCtx.WithField("after", "tag split").Errorf("Format error: Invalid tag format in \"%s\"", name)
+		oldBucket := tagsSlice[0]
+		tagsSlice[0] = sanitizeBucket(tagsSlice[0])
+		logCtx.WithField("after", "sanitizeBucket").Errorf("Format error: Converting bucket name from  \"%s\" to \"%s\"", oldBucket, tagsSlice[0])
+	}
+
 	for _, e := range tagsSlice[1:] {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {

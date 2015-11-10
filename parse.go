@@ -271,7 +271,7 @@ func sanitizeBucket(bucket string) string {
 	for i := 0; i < len(bucket); i++ {
 		c := bucket[i]
 		switch {
-		case (c >= byte('a') && c <= byte('z')) || (c >= byte('A') && c <= byte('Z')) || (c >= byte('0') && c <= byte('9')) || c == byte('-') || c == byte('.') || c == byte('_') || c == byte('='):
+		case (c >= byte('a') && c <= byte('z')) || (c >= byte('A') && c <= byte('Z')) || (c >= byte('0') && c <= byte('9')) || c == byte('-') || c == byte('.') || c == byte('_'):
 			b[bl] = c
 			bl++
 		case c == byte(' '):

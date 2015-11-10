@@ -8,7 +8,7 @@ import statsd
 # alternative lib - https://github.com/WoLpH/python-statsd
 
 ## https://github.com/jsocol/pystatsd/blob/master/docs/reference.rst
-s = statsd.StatsClient('localhost', 8125, prefix='test.ex')
+s = statsd.StatsClient('localhost', 8125, prefix='')
 start = time.time()
 
 while True:
@@ -20,7 +20,7 @@ while True:
         s.incr('foo_incr.^rate=0001', rate=0.001)
 
   # gauge - wartosci (nie sumowalne, np. temperatura)
-  s.gauge('foo_gauge.^test=ex2', int(100 * random.random()))
+  s.gauge('foo_gauge.^test=wojtekz', int(100 * random.random()))
 
   # timer - czas trwania + histogram
   @s.timer('foo_timer', rate=1)
