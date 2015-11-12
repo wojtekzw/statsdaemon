@@ -6,6 +6,8 @@ import (
 	"log/syslog"
 
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -206,6 +208,7 @@ var (
 )
 
 func main() {
+
 	readConfig(true)
 	err := validateConfig()
 	if err != nil {
@@ -237,6 +240,7 @@ func main() {
 				os.Exit(1)
 			}
 			log.SetOutput(logFile)
+			defer logFile.Close()
 		}
 	}
 
@@ -256,6 +260,10 @@ func main() {
 		log.SetOutput(nullWriter)
 	}
 
+	go func() {
+		log.Println(http.ListenAndServe(":8082", nil))
+	}()
+
 	// Stat
 	Stat.Interval = Config.FlushInterval
 
@@ -270,7 +278,7 @@ func main() {
 			"ctx":   "Bolt DB open",
 		}).Fatalf("%s", err)
 	}
-	dbHandle.NoSync = true
+	// dbHandle.NoSync = true
 
 	defer dbHandle.Close()
 

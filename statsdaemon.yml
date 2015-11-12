@@ -15,6 +15,6 @@ receive-counter: statsdaemon.metrics.count
 store-db: /tmp/statsdaemon.db
 prefix: ""
 extra-tags: ""
-log-name: stdout
+log-name: ""
 log-to-syslog: true
 syslog-udp-address: localhost:514

@@ -17,15 +17,21 @@ type DaemonStat struct {
 	Interval      int64
 }
 
+func (ds *DaemonStat) GlobalVarsSizeToString() string {
+	s := fmt.Sprintf("counters: %d, gauges: %d (%#v), lastGaugeValue: %d, lastGaugeTags: %d, timers: %d, countInactivity: %d, sets: %d, keys: %d, tags: %d (%#v)",
+		len(counters), len(gauges), gauges, len(lastGaugeValue), len(lastGaugeTags), len(timers), len(countInactivity), len(sets), len(keys), len(tags), tags)
+	return s
+}
 func (ds *DaemonStat) String() string {
 
-	s := fmt.Sprintf("PointsCounter: %d ops\n", ds.PointsCounter)
-	s = s + fmt.Sprintf("PointsRate: %.2f ops/s\n", ds.PointsRate)
-	s = s + fmt.Sprintf("ErrorsCounter: %d errors\n", ds.ErrorsCounter)
-	s = s + fmt.Sprintf("MemRES: %.0f MB\n", float64(ds.MemGauge.RSS)/(1024*1024))
-	s = s + fmt.Sprintf("MemVIRT: %.0f MB\n", float64(ds.MemGauge.VMS)/(1024*1024))
-	s = s + fmt.Sprintf("MemSwap: %.0f MB\n", float64(ds.MemGauge.Swap)/(1024*1024))
-	s = s + fmt.Sprintf("QueueLen: %d\n", ds.QueueLen)
+	s := fmt.Sprintf("PointsCounter: %d ops, ", ds.PointsCounter)
+	s = s + fmt.Sprintf("PointsRate: %.2f ops/s, ", ds.PointsRate)
+	s = s + fmt.Sprintf("ErrorsCounter: %d errors, ", ds.ErrorsCounter)
+	s = s + fmt.Sprintf("MemRES: %.0f MB, ", float64(ds.MemGauge.RSS)/(1024*1024))
+	s = s + fmt.Sprintf("MemVIRT: %.0f MB, ", float64(ds.MemGauge.VMS)/(1024*1024))
+	s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.MemGauge.Swap)/(1024*1024))
+	s = s + fmt.Sprintf("QueueLen: %d, ", ds.QueueLen)
+	s = s + ds.GlobalVarsSizeToString()
 	return s
 }
 

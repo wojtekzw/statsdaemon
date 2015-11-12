@@ -71,7 +71,7 @@ func submit(deadline time.Time, backend string) error {
 		}
 
 	case "dummy":
-
+		logCtx.WithField("after", "dummy").Infof("wrote %d stats to dummy", num)
 	default:
 		logCtx.WithField("after", "backends").Fatalf("Invalid backend %s. Exiting...\n", backend)
 	}
