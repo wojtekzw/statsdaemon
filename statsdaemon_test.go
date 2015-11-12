@@ -199,9 +199,17 @@ func TestParseLineMisc(t *testing.T) {
 	assert.Equal(t, float32(1), packet.Sampling)
 	flag.Set("prefix", "")
 
-	d = []byte("a.key.with-0.dash:4|c\ngauge:3|g")
+	d = []byte("counter0:11|c|@0.001\na.key.with-0.dash:4|c\ngauge:3|g\ncounter:10|c|@0.01")
 	parser := NewParser(bytes.NewBuffer(d), true)
+
 	packet, more := parser.Next()
+	assert.Equal(t, more, true)
+	assert.Equal(t, "counter0", packet.Bucket)
+	assert.Equal(t, int64(11), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(0.001), packet.Sampling)
+
+	packet, more = parser.Next()
 	assert.Equal(t, more, true)
 	assert.Equal(t, "a.key.with-0.dash", packet.Bucket)
 	assert.Equal(t, int64(4), packet.Value.(int64))
@@ -209,11 +217,18 @@ func TestParseLineMisc(t *testing.T) {
 	assert.Equal(t, float32(1), packet.Sampling)
 
 	packet, more = parser.Next()
-	assert.Equal(t, more, false)
+	assert.Equal(t, more, true)
 	assert.Equal(t, "gauge", packet.Bucket)
 	assert.Equal(t, GaugeData{false, false, 3}, packet.Value)
 	assert.Equal(t, "g", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
+
+	packet, more = parser.Next()
+	assert.Equal(t, more, false)
+	assert.Equal(t, "counter", packet.Bucket)
+	assert.Equal(t, int64(10), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(0.01), packet.Sampling)
 
 	d = []byte("a.key.with-0.dash:4\ngauge3|g")
 	packet = parseLine(d)
@@ -629,29 +644,30 @@ func TestMultipleUDPSends(t *testing.T) {
 	conn, err := net.DialTimeout("udp", addr, 50*time.Millisecond)
 	assert.Equal(t, nil, err)
 
-	n, err := conn.Write([]byte("deploys.test.myservice:2|c"))
+	n, err := conn.Write([]byte("deploys.test.myservice:2|c|@0.0001"))
 	assert.Equal(t, nil, err)
-	assert.Equal(t, len("deploys.test.myservice:2|c"), n)
+	assert.Equal(t, len("deploys.test.myservice:2|c|@0.0001"), n)
 
+	// error in format - not found below in select
 	n, err = conn.Write([]byte("deploys.test.my:service:2|c"))
 
-	n, err = conn.Write([]byte("deploys.test.myservice:1|c"))
+	n, err = conn.Write([]byte("deploys.test.myservice.new:1|c"))
 	assert.Equal(t, nil, err)
-	assert.Equal(t, len("deploys.test.myservice:1|c"), n)
+	assert.Equal(t, len("deploys.test.myservice.new:1|c"), n)
 
 	select {
 	case pack := <-ch:
 		assert.Equal(t, "deploys.test.myservice", pack.Bucket)
 		assert.Equal(t, int64(2), pack.Value.(int64))
 		assert.Equal(t, "c", pack.Modifier)
-		assert.Equal(t, float32(1), pack.Sampling)
+		assert.Equal(t, float32(0.0001), pack.Sampling)
 	case <-time.After(50 * time.Millisecond):
 		t.Fatal("packet receive timeout")
 	}
 
 	select {
 	case pack := <-ch:
-		assert.Equal(t, "deploys.test.myservice", pack.Bucket)
+		assert.Equal(t, "deploys.test.myservice.new", pack.Bucket)
 		assert.Equal(t, int64(1), pack.Value.(int64))
 		assert.Equal(t, "c", pack.Modifier)
 		assert.Equal(t, float32(1), pack.Sampling)

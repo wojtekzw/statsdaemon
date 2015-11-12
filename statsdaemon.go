@@ -6,7 +6,6 @@ import (
 	"log/syslog"
 
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -27,7 +26,7 @@ const (
 	maxUnprocessedPackets = 10000
 
 	tcpReadSize        = 4096
-	maxUDPPacket       = 1472
+	maxUDPPacket       = 512 //1432
 	flushInterval      = 10
 	dbPath             = "/tmp/statsdaemon.db"
 	configPath         = "/etc/statsdaemon/statsdaemon.yml"
@@ -180,7 +179,7 @@ func readConfig(parse bool) {
 	if len(Config.ExtraTagsHash) > 0 {
 		firstDelim, _, _ = tagsDelims(tfDefault)
 	}
-	Config.ReceiveCounterWithTags = Config.ReceiveCounter + firstDelim + normalizeTags(Config.ExtraTagsHash, tfDefault)
+	Config.ReceiveCounterWithTags = Config.Prefix + Config.ReceiveCounter + firstDelim + normalizeTags(Config.ExtraTagsHash, tfDefault)
 
 	// Set InternalLogLevel
 	Config.InternalLogLevel, err = log.ParseLevel(Config.LogLevel)
@@ -193,18 +192,18 @@ func readConfig(parse bool) {
 
 // Global var used for all metrics
 var (
-	In              = make(chan *Packet, maxUnprocessedPackets)
-	counters        = make(map[string]int64)
-	gauges          = make(map[string]float64)
-	lastGaugeValue  = make(map[string]float64)
-	lastGaugeTags   = make(map[string]map[string]string)
+	In             = make(chan *Packet, maxUnprocessedPackets)
+	counters       = make(map[string]int64)
+	gauges         = make(map[string]float64)
+	lastGaugeValue = make(map[string]float64)
+	// lastGaugeTags   = make(map[string]map[string]string)
 	timers          = make(map[string]Float64Slice)
 	countInactivity = make(map[string]int64)
 	sets            = make(map[string][]string)
 	keys            = make(map[string][]string)
-	tags            = make(map[string]map[string]string)
-	dbHandle        *bolt.DB
-	logFile         io.Writer
+	// tags            = make(map[string]map[string]string)
+	dbHandle *bolt.DB
+	logFile  io.Writer
 )
 
 func main() {
@@ -239,6 +238,7 @@ func main() {
 				fmt.Printf("Error opennig log file: %s\n", err)
 				os.Exit(1)
 			}
+			log.SetFormatter(&log.TextFormatter{DisableColors: true})
 			log.SetOutput(logFile)
 			defer logFile.Close()
 		}
@@ -260,9 +260,11 @@ func main() {
 		log.SetOutput(nullWriter)
 	}
 
-	go func() {
-		log.Println(http.ListenAndServe(":8082", nil))
-	}()
+	// if Config.LogLevel == "debug" {
+	// 	go func() {
+	// 		log.Println(http.ListenAndServe(":8082", nil))
+	// 	}()
+	// }
 
 	// Stat
 	Stat.Interval = Config.FlushInterval

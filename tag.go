@@ -132,11 +132,22 @@ func addTags(t1, t2 map[string]string) map[string]string {
 	// add t2 + t1
 	// t1 overwrites tags in t2, as t1 is more important
 	// t1 - bucket tags, t2 extra tags
-	for k, v := range t1 {
-		t2[k] = v
+
+	// make copy of t2 in t3
+
+	t3 := make(map[string]string)
+
+	for k, v := range t2 {
+		t3[k] = v
 	}
-	return t2
+
+	// add/overwrite t3 by t1
+	for k, v := range t1 {
+		t3[k] = v
+	}
+	return t3
 }
+
 func normalizeTags(t map[string]string, tf uint) string {
 
 	return tagsToSortedSlice(t).StringType(tf)

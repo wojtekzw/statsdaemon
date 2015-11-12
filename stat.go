@@ -18,8 +18,8 @@ type DaemonStat struct {
 }
 
 func (ds *DaemonStat) GlobalVarsSizeToString() string {
-	s := fmt.Sprintf("counters: %d, gauges: %d (%#v), lastGaugeValue: %d, lastGaugeTags: %d, timers: %d, countInactivity: %d, sets: %d, keys: %d, tags: %d (%#v)",
-		len(counters), len(gauges), gauges, len(lastGaugeValue), len(lastGaugeTags), len(timers), len(countInactivity), len(sets), len(keys), len(tags), tags)
+	s := fmt.Sprintf("counters: %d, gauges: %d, lastGaugeValue: %d, timers: %d, countInactivity: %d, sets: %d, keys: %d",
+		len(counters), len(gauges), len(lastGaugeValue), len(timers), len(countInactivity), len(sets), len(keys))
 	return s
 }
 func (ds *DaemonStat) String() string {

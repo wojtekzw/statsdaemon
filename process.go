@@ -26,7 +26,7 @@ func packetHandler(s *Packet) {
 	}
 
 	// global var tags
-	tags[s.Bucket] = s.Tags
+	// tags[s.Bucket] = s.Tags
 
 	switch s.Modifier {
 	// timer
@@ -124,12 +124,12 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	}
 
 	switch backend {
-	case "external", "opentsdb":
+	case "external", "opentsdb", "dummy":
 		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(localTags, tfPretty))
 	case "graphite":
 		ret = fmt.Sprintf("%s%s%s%s %s %d", cleanBucket, setFirstGraphite, sepTags, normalizeTags(localTags, tfGraphite), val, now)
 	default:
-		ret = ""
+		ret = "UNKNOWN_BACKEND"
 	}
 	logCtx.WithField("after", "format line").Debugf("%s", ret)
 	return ret
@@ -166,7 +166,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		nowCounter.When = now
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, nowCounter.Value, now, backend))
 		delete(counters, bucket)
-		delete(tags, bucket)
+		// delete(tags, bucket)
 
 		countInactivity[bucket] = 0
 
@@ -228,9 +228,9 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, currentValue, now, backend))
 			// FIXME Memoryleak - never free lastGaugeValue & lastGaugeTags when a lot of unique bucket are used
 			lastGaugeValue[bucket] = currentValue
-			lastGaugeTags[bucket] = tags[bucket]
+			// lastGaugeTags[bucket] = tags[bucket]
 			gauges[bucket] = math.MaxUint64
-			delete(tags, bucket)
+			// delete(tags, bucket)
 			num++
 		case hasLastValue && !hasChanged && !Config.DeleteGauges:
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, lastValue, now, backend))
@@ -253,7 +253,7 @@ func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
 
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, len(uniqueSet), now, backend))
 		delete(sets, bucket)
-		delete(tags, bucket)
+		// delete(tags, bucket)
 	}
 	return num
 }
@@ -273,7 +273,7 @@ func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, value, now, backend))
 		}
 		delete(keys, bucket)
-		delete(tags, bucket)
+		// delete(tags, bucket)
 	}
 	return num
 }
@@ -356,7 +356,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s", cleanBucket, sTags), min, now, backend))
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s", cleanBucket, sTags), count, now, backend))
 		delete(timers, bucket)
-		delete(localTags, bucket)
+		// delete(localTags, bucket)
 	}
 	return num
 }

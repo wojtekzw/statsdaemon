@@ -24,9 +24,25 @@ type Packet struct {
 	Value       interface{}
 	SrcBucket   string
 	CleanBucket string
-	Tags        map[string]string
-	Modifier    string
-	Sampling    float32
+	// Tags        map[string]string
+	Modifier string
+	Sampling float32
+}
+
+func parseTo(conn io.ReadCloser, partialReads bool, out chan<- *Packet) {
+	defer conn.Close()
+
+	parser := NewParser(conn, partialReads)
+	for {
+		p, more := parser.Next()
+		if p != nil {
+			out <- p
+		}
+
+		if !more {
+			break
+		}
+	}
 }
 
 // MsgParser - struct for reading data from UDP/TCP packet
@@ -53,6 +69,7 @@ func (mp *MsgParser) Next() (*Packet, bool) {
 	buf := mp.buffer
 
 	for {
+
 		line, rest := mp.lineFrom(buf)
 
 		if line != nil {
@@ -105,6 +122,7 @@ func (mp *MsgParser) Next() (*Packet, bool) {
 }
 
 func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
+
 	split := bytes.SplitAfterN(input, []byte("\n"), 2)
 	if len(split) == 2 {
 		return split[0][:len(split[0])-1], split[1]
@@ -131,7 +149,7 @@ func parseLine(line []byte) *Packet {
 		"ctx": "Parse packet",
 	})
 
-	tags := make(map[string]string)
+	tagsFromBucketName := make(map[string]string)
 
 	logCtx.WithField("after", "parseLine").Debugf("Input packet line: %s", string(line))
 
@@ -233,7 +251,8 @@ func parseLine(line []byte) *Packet {
 	}
 
 	// parse tags from bucket name
-	cleanBucket, tags, err = parseBucketAndTags(string(name))
+	tagsFromBucketName = map[string]string{}
+	cleanBucket, tagsFromBucketName, err = parseBucketAndTags(string(name))
 	if err != nil {
 		logCtx.WithField("after", "parseBucketAndTags").Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
 		Stat.ErrorIncr()
@@ -242,35 +261,19 @@ func parseLine(line []byte) *Packet {
 
 	// bucket is set to a name WITH tags
 	firstDelim := ""
-	if len(tags) > 0 || len(Config.ExtraTagsHash) > 0 {
+	if len(tagsFromBucketName) > 0 || len(Config.ExtraTagsHash) > 0 {
 		firstDelim, _, _ = tagsDelims(tfDefault)
 	}
-	bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tags, Config.ExtraTagsHash), tfDefault)
+	bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tagsFromBucketName, Config.ExtraTagsHash), tfDefault)
 
 	return &Packet{
 		Bucket:      bucket,
 		Value:       value,
 		SrcBucket:   string(name),
 		CleanBucket: cleanBucket,
-		Tags:        tags,
-		Modifier:    typeCode,
-		Sampling:    sampling,
-	}
-}
-
-func parseTo(conn io.ReadCloser, partialReads bool, out chan<- *Packet) {
-	defer conn.Close()
-
-	parser := NewParser(conn, partialReads)
-	for {
-		p, more := parser.Next()
-		if p != nil {
-			out <- p
-		}
-
-		if !more {
-			break
-		}
+		// Tags:        tagsFromBucketName,
+		Modifier: typeCode,
+		Sampling: sampling,
 	}
 }
 

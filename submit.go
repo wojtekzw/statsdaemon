@@ -38,6 +38,16 @@ func submit(deadline time.Time, backend string) error {
 		}
 	}
 
+	if Config.InternalLogLevel == log.InfoLevel {
+
+		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
+			if len(line) == 0 {
+				continue
+			}
+			logCtx.WithField("after", "Processing metrics").Infof("Output line: %s", line)
+		}
+	}
+
 	// send stats to backend
 	switch backend {
 	case "external":
@@ -72,12 +82,11 @@ func submit(deadline time.Time, backend string) error {
 
 	case "dummy":
 		logCtx.WithField("after", "dummy").Infof("wrote %d stats to dummy", num)
+
 	default:
 		logCtx.WithField("after", "backends").Fatalf("Invalid backend %s. Exiting...\n", backend)
 	}
 
-	// fmt.Printf("Len size - end submit: %d\n", len(In))
-	// Stat section
 	Stat.QueueLen = int64(len(In))
 	Stat.ProcessStats()
 	logCtx.WithField("after", "submit").Infof("%s", Stat.String())
