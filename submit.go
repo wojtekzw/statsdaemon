@@ -20,7 +20,7 @@ func submit(deadline time.Time, backend string) error {
 	// Prepare internal stats (queueLen is set at the end of func)
 	Stat.ProcessStats()
 	Stat.WriteMerics(counters, gauges, timers, Config.Prefix, Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
-	logCtx.WithField("after", "submit").Infof("%s", Stat.String())
+	logCtx.WithField("after", "ProcessStats").Infof("%s", Stat.String())
 
 	// fmt.Printf("Len size - start submit: %d\n", len(In))
 	// Universal format in buffer
@@ -40,16 +40,6 @@ func submit(deadline time.Time, backend string) error {
 				continue
 			}
 			logCtx.WithField("after", "Processing metrics").Debugf("Output line: %s", line)
-		}
-	}
-
-	if Config.InternalLogLevel == log.InfoLevel {
-
-		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
-			if len(line) == 0 {
-				continue
-			}
-			logCtx.WithField("after", "Processing metrics").Infof("Output line: %s", line)
 		}
 	}
 
