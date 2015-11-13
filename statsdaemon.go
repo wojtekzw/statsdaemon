@@ -65,9 +65,9 @@ type ConfigApp struct {
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
 	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
 	// private - calculated below
-	ExtraTagsHash          map[string]string `yaml:"-"`
-	ReceiveCounterWithTags string            `yaml:"-"`
-	InternalLogLevel       log.Level         `yaml:"-"`
+	ExtraTagsHash map[string]string `yaml:"-"`
+	// ReceiveCounterWithTags string            `yaml:"-"`
+	InternalLogLevel log.Level `yaml:"-"`
 }
 
 // Global vars for command line flags
@@ -168,18 +168,18 @@ func readConfig(parse bool) {
 		// flag.Visit(visitor)
 	}
 
+	// Normalize prefix
+	Config.Prefix = normalizeDot(Config.Prefix, true)
+
+	// Normalize internal metrics name
+	Config.ReceiveCounter = normalizeDot(Config.ReceiveCounter, true)
+
 	// calculate extraFlags hash
 	Config.ExtraTagsHash, err = parseExtraTags(Config.ExtraTags)
 	if err != nil {
 		fmt.Printf("Extra Tags: \"%s\" - %s\n", Config.ExtraTags, err)
 		os.Exit(1)
 	}
-	// calculate bucket name ReceiveCounterWithTags
-	firstDelim := ""
-	if len(Config.ExtraTagsHash) > 0 {
-		firstDelim, _, _ = tagsDelims(tfDefault)
-	}
-	Config.ReceiveCounterWithTags = Config.Prefix + Config.ReceiveCounter + firstDelim + normalizeTags(Config.ExtraTagsHash, tfDefault)
 
 	// Set InternalLogLevel
 	Config.InternalLogLevel, err = log.ParseLevel(Config.LogLevel)

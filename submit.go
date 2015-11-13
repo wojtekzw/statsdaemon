@@ -17,6 +17,11 @@ func submit(deadline time.Time, backend string) error {
 		"ctx": "Buffer send to backend",
 	})
 
+	// Prepare internal stats (queueLen is set at the end of func)
+	Stat.ProcessStats()
+	Stat.WriteMerics(counters, gauges, timers, Config.Prefix, Config.ReceiveCounter, normalizeTags(Config.ExtraTagsHash, tfDefault))
+	logCtx.WithField("after", "submit").Infof("%s", Stat.String())
+
 	// fmt.Printf("Len size - start submit: %d\n", len(In))
 	// Universal format in buffer
 	num += processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
@@ -87,11 +92,8 @@ func submit(deadline time.Time, backend string) error {
 		logCtx.WithField("after", "backends").Fatalf("Invalid backend %s. Exiting...\n", backend)
 	}
 
+	//  Internal stats
 	Stat.QueueLen = int64(len(In))
-	Stat.ProcessStats()
-	logCtx.WithField("after", "submit").Infof("%s", Stat.String())
-	Stat.PointsCounter = 0
-	Stat.ErrorsCounter = 0
 
 	return nil
 }

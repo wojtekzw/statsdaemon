@@ -107,6 +107,11 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 		if err != nil {
 			return err
 		}
+
+		logCtx = log.WithFields(log.Fields{
+			"in":  "openTSDB",
+			"ctx": "success writing to OpenTSDB",
+		})
 		logCtx.WithField("after", "Put").Infof("sent %d stats to %s", num, config.OpenTSDBAddress)
 
 		return nil

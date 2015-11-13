@@ -63,6 +63,55 @@ func TestParseBucketAndTags(t *testing.T) {
 	}
 
 }
+
+func TestNormalizeDot(t *testing.T) {
+	type testCase struct {
+		input  string
+		se     bool
+		output string
+	}
+	checks := []testCase{
+		{input: "", se: false, output: ""},
+		{input: "test", se: false, output: "test"},
+		{input: "test.", se: false, output: "test"},
+		{input: "", se: true, output: ""},
+		{input: "test", se: true, output: "test."},
+		{input: "test.", se: true, output: "test."},
+	}
+
+	for _, r := range checks {
+		out := normalizeDot(r.input, r.se)
+		assert.Equal(t, out, r.output)
+	}
+
+}
+
+func TestMakeBucketName(t *testing.T) {
+	type testCase struct {
+		gp  string
+		mnp string
+		mn  string
+		ets string
+		out string
+	}
+	checks := []testCase{
+		{gp: "", mnp: "", mn: "test", ets: "", out: "test"},
+		{gp: "", mnp: "", mn: "test", ets: "end", out: "test.end"},
+		{gp: "", mnp: "prefixname", mn: "test", ets: "", out: "prefixname.test"},
+		{gp: "", mnp: "prefixname.", mn: "test", ets: "", out: "prefixname.test"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "", out: "global.prefixname.test"},
+		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", out: "global.prefixname.test"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "end", out: "global.prefixname.test.end"},
+		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", out: "global.prefixname.test"},
+	}
+
+	for _, r := range checks {
+		out := makeBucketName(r.gp, r.mnp, r.mn, r.ets)
+		assert.Equal(t, out, r.out)
+	}
+
+}
+
 func TestRemoveEmptyLines(t *testing.T) {
 	lines := []string{"sth1", "", "sth2", ""}
 	linesOut := removeEmptyLines(lines)
@@ -337,8 +386,9 @@ func TestMultiLine(t *testing.T) {
 }
 
 func TestPacketHandlerReceiveCounter(t *testing.T) {
-	counters = make(map[string]int64)
-	Config.ReceiveCounterWithTags = "countme"
+
+	Stat.PointsCounter = 0
+	Config.ResetCounters = true
 
 	p := &Packet{
 		Bucket:   "gorets",
@@ -347,10 +397,10 @@ func TestPacketHandlerReceiveCounter(t *testing.T) {
 		Sampling: float32(1),
 	}
 	packetHandler(p)
-	assert.Equal(t, counters["countme"], int64(1))
+	assert.Equal(t, Stat.PointsCounter, int64(1))
 
 	packetHandler(p)
-	assert.Equal(t, counters["countme"], int64(2))
+	assert.Equal(t, Stat.PointsCounter, int64(2))
 }
 
 func TestPacketHandlerCount(t *testing.T) {

@@ -17,14 +17,6 @@ func packetHandler(s *Packet) {
 	// New stat variable
 	Stat.PointIncr()
 
-	if Config.ReceiveCounterWithTags != "" {
-		v, ok := counters[Config.ReceiveCounterWithTags]
-		if !ok || v < 0 {
-			counters[Config.ReceiveCounterWithTags] = 0
-		}
-		counters[Config.ReceiveCounterWithTags]++
-	}
-
 	// global var tags
 	// tags[s.Bucket] = s.Tags
 
