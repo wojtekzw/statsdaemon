@@ -19,7 +19,7 @@ func submit(deadline time.Time, backend string) error {
 
 	// Prepare internal stats (queueLen is set at the end of func)
 	Stat.ProcessStats()
-	Stat.WriteMerics(counters, gauges, timers, Config.Prefix, Config.ReceiveCounter, normalizeTags(Config.ExtraTagsHash, tfDefault))
+	Stat.WriteMerics(counters, gauges, timers, Config.Prefix, Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
 	logCtx.WithField("after", "submit").Infof("%s", Stat.String())
 
 	// fmt.Printf("Len size - start submit: %d\n", len(In))

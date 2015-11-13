@@ -11,7 +11,7 @@ log-level: error
 delete-gauges: true
 reset-counters: true
 persist-count-keys: 0
-receive-counter: statsdaemon.metrics.count
+stats-prefix: statsdaemon
 store-db: /tmp/statsdaemon.db
 prefix: ""
 extra-tags: ""

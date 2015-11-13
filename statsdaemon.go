@@ -25,12 +25,12 @@ import (
 const (
 	maxUnprocessedPackets = 10000
 
-	tcpReadSize        = 4096
-	maxUDPPacket       = 512 //1432
-	flushInterval      = 10
-	dbPath             = "/tmp/statsdaemon.db"
-	configPath         = "/etc/statsdaemon/statsdaemon.yml"
-	receiveCounterName = "statsdaemon.metrics.count"
+	tcpReadSize     = 4096
+	maxUDPPacket    = 512 //1432
+	flushInterval   = 10
+	dbPath          = "/tmp/statsdaemon.db"
+	configPath      = "/etc/statsdaemon/statsdaemon.yml"
+	statsPrefixName = "statsdaemon"
 
 	defaultGraphiteAddress = "127.0.0.1:2003"
 	defaultOpenTSDBAddress = "127.0.0.1:4242"
@@ -55,7 +55,7 @@ type ConfigApp struct {
 	DeleteGauges      bool        `yaml:"delete-gauges"`
 	ResetCounters     bool        `yaml:"reset-counters"`
 	PersistCountKeys  int64       `yaml:"persist-count-keys"`
-	ReceiveCounter    string      `yaml:"receive-counter"`
+	StatsPrefix       string      `yaml:"stats-prefix"`
 	StoreDb           string      `yaml:"store-db"`
 	Prefix            string      `yaml:"prefix"`
 	ExtraTags         string      `yaml:"extra-tags"`
@@ -65,9 +65,8 @@ type ConfigApp struct {
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
 	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
 	// private - calculated below
-	ExtraTagsHash map[string]string `yaml:"-"`
-	// ReceiveCounterWithTags string            `yaml:"-"`
-	InternalLogLevel log.Level `yaml:"-"`
+	ExtraTagsHash    map[string]string `yaml:"-"`
+	InternalLogLevel log.Level         `yaml:"-"`
 }
 
 // Global vars for command line flags
@@ -96,7 +95,7 @@ func readConfig(parse bool) {
 	ConfigYAML.DeleteGauges = true
 	ConfigYAML.ResetCounters = true
 	ConfigYAML.PersistCountKeys = 0
-	ConfigYAML.ReceiveCounter = receiveCounterName
+	ConfigYAML.StatsPrefix = statsPrefixName
 	ConfigYAML.StoreDb = dbPath
 	ConfigYAML.Prefix = ""
 	ConfigYAML.ExtraTags = ""
@@ -120,7 +119,7 @@ func readConfig(parse bool) {
 	flag.BoolVar(&Config.DeleteGauges, "delete-gauges", ConfigYAML.DeleteGauges, "Don't send values to graphite for inactive gauges, as opposed to sending the previous value")
 	flag.BoolVar(&Config.ResetCounters, "reset-counters", ConfigYAML.ResetCounters, "Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)")
 	flag.Int64Var(&Config.PersistCountKeys, "persist-count-keys", ConfigYAML.PersistCountKeys, "Number of flush-intervals to persist count keys")
-	flag.StringVar(&Config.ReceiveCounter, "receive-counter", ConfigYAML.ReceiveCounter, "Metric name for total metrics received per interval (no prefix,postfix added, only extra-tags)")
+	flag.StringVar(&Config.StatsPrefix, "stats-prefix", ConfigYAML.StatsPrefix, "Metric name for internal application metrics")
 	flag.StringVar(&Config.StoreDb, "store-db", ConfigYAML.StoreDb, "Name of database for permanent counters storage (for conversion from rate to counter)")
 	flag.StringVar(&Config.Prefix, "prefix", ConfigYAML.Prefix, "Prefix for all stats")
 	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1 tag2=value2")
@@ -172,7 +171,7 @@ func readConfig(parse bool) {
 	Config.Prefix = normalizeDot(Config.Prefix, true)
 
 	// Normalize internal metrics name
-	Config.ReceiveCounter = normalizeDot(Config.ReceiveCounter, true)
+	Config.StatsPrefix = normalizeDot(Config.StatsPrefix, true)
 
 	// calculate extraFlags hash
 	Config.ExtraTagsHash, err = parseExtraTags(Config.ExtraTags)
