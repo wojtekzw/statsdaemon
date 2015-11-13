@@ -59,23 +59,25 @@ Command Line Options
 
 ```
 Usage of ./statsdaemon:
-      --backend-type="external": MANDATORY: Backend to use: graphite, opentsdb, external
-      --config="/etc/statsdaemon/statsdaemon.yml": Configuration file name (warning not error if not exists)
-      --debug=false: Print statistics sent to backend
+      --backend-type="external": MANDATORY: Backend to use: graphite, opentsdb, external, dummy
+      --config="": Configuration file name (warning not error if not exists). Standard: /etc/statsdaemon/statsdaemon.yml
       --delete-gauges=true: Don't send values to graphite for inactive gauges, as opposed to sending the previous value
-      --extra-tags="": Default tags added to all measures in format: tag1=value1,tag2=value2
+      --extra-tags="": Default tags added to all measures in format: tag1=value1 tag2=value2
       --flush-interval=10: Flush interval (seconds)
       --graphite="127.0.0.1:2003": Graphite service address
-      --log-name="stdout": Name of file to log into. If empty or "stdout" than logs to stdout
-      --max-udp-packet-size=1472: Maximum UDP packet size
+      --log-level="error": Set log level (debug,info,warn,error,fatal)
+      --log-name="stdout": Name of file to log into. If "stdout" than logs to stdout.If empty logs go to /dev/null
+      --log-to-syslopg=true: Log to syslog
+      --max-udp-packet-size=1432: Maximum UDP packet size
       --opentsdb="127.0.0.1:4242": OpenTSDB service address
       --persist-count-keys=0: Number of flush-intervals to persist count keys
       --post-flush-cmd="stdout": Command to run on each flush
       --prefix="": Prefix for all stats
       --print-config=false: Print config in YAML format
-      --receive-counter="statsdaemon.metrics.count": Metric name for total metrics received per interval (no prefix,postfix added, only extra-tags)
       --reset-counters=true: Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)
+      --stats-prefix="statsdaemon": Name for internal application metrics
       --store-db="/tmp/statsdaemon.db": Name of database for permanent counters storage (for conversion from rate to counter)
+      --syslog-udp-address="localhost:514": Syslog address with port number eg. localhost:514
       --tcp-addr="": TCP listen service address, if set
       --udp-addr=":8125": UDP listen service address
       --version=false: Print version string
