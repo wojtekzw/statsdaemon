@@ -77,7 +77,7 @@ Usage of ./statsdaemon:
       --reset-counters=true: Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)
       --stats-prefix="statsdaemon": Name for internal application metrics
       --store-db="/tmp/statsdaemon.db": Name of database for permanent counters storage (for conversion from rate to counter)
-      --syslog-udp-address="localhost:514": Syslog address with port number eg. localhost:514
+      --syslog-udp-address="localhost:514": Syslog address with port number eg. localhost:514. If empty log to unix socket
       --tcp-addr="": TCP listen service address, if set
       --udp-addr=":8125": UDP listen service address
       --version=false: Print version string
