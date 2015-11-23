@@ -59,7 +59,7 @@ func (ds *DaemonStat) ErrorIncr() {
 func (ds *DaemonStat) WriteMerics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
 
 	var ok bool
-	fmt.Println("EXTRA: ", extraTagsStr)
+
 	if len(metricNamePrefix) == 0 {
 		return fmt.Errorf("Empty metric name prefix. No saving to backend")
 	}
