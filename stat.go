@@ -59,7 +59,7 @@ func (ds *DaemonStat) ErrorIncr() {
 func (ds *DaemonStat) WriteMerics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
 
 	var ok bool
-
+	fmt.Println("EXTRA: ", extraTagsStr)
 	if len(metricNamePrefix) == 0 {
 		return fmt.Errorf("Empty metric name prefix. No saving to backend")
 	}
@@ -117,7 +117,12 @@ func makeBucketName(globalPrefix string, metricNamePrefix string, metricName str
 	if len(globalPrefix) == 0 && len(metricNamePrefix) == 0 && len(extraTagsStr) == 0 {
 		return metricName
 	}
-	return normalizeDot(globalPrefix, true) + normalizeDot(metricNamePrefix, true) + normalizeDot(metricName, len(extraTagsStr) > 0) + normalizeDot(extraTagsStr, false)
+
+	sep := ""
+	if len(extraTagsStr) > 0 {
+		sep = "^"
+	}
+	return normalizeDot(globalPrefix, true) + normalizeDot(metricNamePrefix, true) + normalizeDot(metricName, len(extraTagsStr) > 0) + sep + normalizeDot(extraTagsStr, false)
 }
 
 func normalizeDot(s string, suffixExists bool) string {

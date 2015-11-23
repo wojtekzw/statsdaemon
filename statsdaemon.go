@@ -127,7 +127,7 @@ func readConfig(parse bool) {
 	flag.BoolVar(&Config.PrintConfig, "print-config", ConfigYAML.PrintConfig, "Print config in YAML format")
 	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If \"stdout\" than logs to stdout.If empty logs go to /dev/null")
 	flag.BoolVar(&Config.LogToSyslog, "log-to-syslopg", ConfigYAML.LogToSyslog, "Log to syslog")
-	flag.StringVar(&Config.SyslogUDPAddress, "syslog-udp-address", ConfigYAML.SyslogUDPAddress, "Syslog address with port number eg. localhost:514")
+	flag.StringVar(&Config.SyslogUDPAddress, "syslog-udp-address", ConfigYAML.SyslogUDPAddress, "Syslog address with port number eg. localhost:514. If empty log to unix socket")
 	if parse {
 		flag.Parse()
 	}
@@ -244,9 +244,13 @@ func main() {
 		}
 	}
 
-	if Config.LogToSyslog && len(Config.SyslogUDPAddress) > 0 {
+	if Config.LogToSyslog {
 		// set syslog
-		hook, err := logrus_syslog.NewSyslogHook("udp", Config.SyslogUDPAddress, syslog.LOG_DEBUG|syslog.LOG_LOCAL3, "statsdaemon")
+		syslogNetwork := ""
+		if len(Config.SyslogUDPAddress) > 0 {
+			syslogNetwork = "udp"
+		}
+		hook, err := logrus_syslog.NewSyslogHook(syslogNetwork, Config.SyslogUDPAddress, syslog.LOG_DEBUG|syslog.LOG_LOCAL3, "statsdaemon")
 		if err != nil {
 			fmt.Printf("Unable to connect to syslog daemon: %s\n", err)
 		} else {
