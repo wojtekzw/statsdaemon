@@ -119,7 +119,7 @@ func readConfig(parse bool) {
 	flag.BoolVar(&Config.DeleteGauges, "delete-gauges", ConfigYAML.DeleteGauges, "Don't send values to graphite for inactive gauges, as opposed to sending the previous value")
 	flag.BoolVar(&Config.ResetCounters, "reset-counters", ConfigYAML.ResetCounters, "Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)")
 	flag.Int64Var(&Config.PersistCountKeys, "persist-count-keys", ConfigYAML.PersistCountKeys, "Number of flush-intervals to persist count keys")
-	flag.StringVar(&Config.StatsPrefix, "stats-prefix", ConfigYAML.StatsPrefix, "Name for internal application metrics")
+	flag.StringVar(&Config.StatsPrefix, "stats-prefix", ConfigYAML.StatsPrefix, "Name for internal application metrics (no prefix prepended)")
 	flag.StringVar(&Config.StoreDb, "store-db", ConfigYAML.StoreDb, "Name of database for permanent counters storage (for conversion from rate to counter)")
 	flag.StringVar(&Config.Prefix, "prefix", ConfigYAML.Prefix, "Prefix for all stats")
 	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1 tag2=value2")
