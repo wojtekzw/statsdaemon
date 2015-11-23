@@ -17,4 +17,6 @@ prefix: ""
 extra-tags: ""
 log-name: ""
 log-to-syslog: true
-syslog-udp-address: localhost:514
+# log to unix socket
+syslog-udp-address: ""
+#syslog-udp-address: localhost:514
