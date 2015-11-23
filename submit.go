@@ -21,6 +21,7 @@ func submit(deadline time.Time, backend string) error {
 	Stat.ProcessStats()
 	Stat.WriteMerics(counters, gauges, timers, Config.Prefix, Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
 	logCtx.WithField("after", "ProcessStats").Infof("%s", Stat.String())
+	Stat.PointsCounter = 0 // reset counter after each interval
 
 	// fmt.Printf("Len size - start submit: %d\n", len(In))
 	// Universal format in buffer
@@ -31,6 +32,7 @@ func submit(deadline time.Time, backend string) error {
 	num += processKeyValue(&buffer, now, backend)
 
 	if num == 0 {
+		Stat.QueueLen = int64(len(In))
 		return nil
 	}
 

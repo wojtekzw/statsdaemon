@@ -206,9 +206,10 @@ var (
 )
 
 func main() {
+	var err error
 
 	readConfig(true)
-	err := validateConfig()
+	err = validateConfig()
 	if err != nil {
 		fmt.Printf("\n%s\n\n", err)
 		flag.Usage()
@@ -327,6 +328,17 @@ func udpListener() {
 	if err != nil {
 
 		logCtx.WithField("after", "ListenUDP").Fatalf("%s", err)
+	}
+	err = listener.SetReadBuffer(1024 * 1024 * 50)
+	if err != nil {
+
+		logCtx.WithField("after", "SetReadBuffer").Fatalf("%s", err)
+	}
+
+	err = listener.SetWriteBuffer(1024 * 1024 * 50)
+	if err != nil {
+
+		logCtx.WithField("after", "SetWriteBuffer").Fatalf("%s", err)
 	}
 
 	parseTo(listener, false, In)
