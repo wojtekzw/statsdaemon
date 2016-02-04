@@ -96,12 +96,12 @@ func TestMakeBucketName(t *testing.T) {
 	}
 	checks := []testCase{
 		{gp: "", mnp: "", mn: "test", ets: "", out: "test"},
-		{gp: "", mnp: "", mn: "test", ets: "end", out: "test.end"},
+		{gp: "", mnp: "", mn: "test", ets: "end=koniec", out: "test.^end=koniec"},
 		{gp: "", mnp: "prefixname", mn: "test", ets: "", out: "prefixname.test"},
 		{gp: "", mnp: "prefixname.", mn: "test", ets: "", out: "prefixname.test"},
 		{gp: "global", mnp: "prefixname", mn: "test", ets: "", out: "global.prefixname.test"},
 		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", out: "global.prefixname.test"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "end", out: "global.prefixname.test.end"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", out: "global.prefixname.test.^end=koniec"},
 		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", out: "global.prefixname.test"},
 	}
 

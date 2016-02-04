@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log/syslog"
 
 	"net"
@@ -260,8 +261,7 @@ func main() {
 	}
 
 	if Config.LogName == "" {
-		nullWriter := new(NullWriter)
-		log.SetOutput(nullWriter)
+		log.SetOutput(ioutil.Discard)
 	}
 
 	// if Config.LogLevel == "debug" {
@@ -333,17 +333,17 @@ func udpListener() {
 
 		logCtx.WithField("after", "ListenUDP").Fatalf("%s", err)
 	}
-	err = listener.SetReadBuffer(1024 * 1024 * 50)
-	if err != nil {
-
-		logCtx.WithField("after", "SetReadBuffer").Fatalf("%s", err)
-	}
-
-	err = listener.SetWriteBuffer(1024 * 1024 * 50)
-	if err != nil {
-
-		logCtx.WithField("after", "SetWriteBuffer").Fatalf("%s", err)
-	}
+	// err = listener.SetReadBuffer(1024 * 1024 * 50)
+	// if err != nil {
+	//
+	// 	logCtx.WithField("after", "SetReadBuffer").Fatalf("%s", err)
+	// }
+	//
+	// err = listener.SetWriteBuffer(1024 * 1024 * 50)
+	// if err != nil {
+	//
+	// 	logCtx.WithField("after", "SetWriteBuffer").Fatalf("%s", err)
+	// }
 
 	parseTo(listener, false, In)
 }

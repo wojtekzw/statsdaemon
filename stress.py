@@ -13,8 +13,12 @@ s = statsd.StatsClient('localhost', 8125, prefix='')
 start = time.time()
 
 k = 0
-MaxLoop = 3
-while True:
+MaxLoop = 1
+Endless = False
+s.gauge('foo_gauge-111.^test=wojtekz',100)
+s.gauge('foo_gauge-111.^test=wojtekz',-1,delta=True)
+s.gauge('foo_gauge-111.^test=wojtekz',12,delta=True)
+while (k >= MaxLoop) or Endless:
   # incr/decr - liczniki
   s.incr('foo_incr.^rate=1000')
   s.incr('foo_incr.^rate=0100', rate=0.100)

@@ -36,12 +36,12 @@ func submit(deadline time.Time, backend string) error {
 		return nil
 	}
 
-	if Config.InternalLogLevel == log.DebugLevel {
+	if Config.InternalLogLevel >= log.InfoLevel {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
 			if len(line) == 0 {
 				continue
 			}
-			logCtx.WithField("after", "Processing metrics").Debugf("Output line: %s", line)
+			logCtx.WithField("after", "Processing metrics").Infof("Metrics to backend: %s", line)
 		}
 	}
 
