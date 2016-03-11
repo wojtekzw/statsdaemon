@@ -41,7 +41,7 @@ func submit(deadline time.Time, backend string) error {
 			if len(line) == 0 {
 				continue
 			}
-			logCtx.WithField("after", "Processing metrics").Infof("Metrics to backend: %s", line)
+			logCtx.WithField("after", "Processing metrics").Infof("Metrics to backend DEBUG: %s", line)
 		}
 	}
 

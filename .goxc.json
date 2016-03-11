@@ -7,7 +7,7 @@
 	"Os": "linux,darwin",
 	"ResourcesInclude": "*LICENSE*, README*",
 	"MainDirsExclude": "tools/",
-	"PackageVersion": "0.9.1",
+	"PackageVersion": "0.9.6.2",
 	"ConfigVersion": "0.9",
 	"TaskSettings": {
             "go-fmt": {
