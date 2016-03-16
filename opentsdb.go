@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,11 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 		"in":  "openTSDB",
 		"ctx": "Metric format error",
 	})
+
+	maxMetrics := 10
+	if i, err := strconv.Atoi(os.Getenv("STATSDAEMON_MAXMETRICS")); err == nil && i > 0 {
+		maxMetrics = i
+	}
 
 	if config.OpenTSDBAddress != "-" && config.OpenTSDBAddress != "" {
 		datapoints := []tsdb.DataPoint{}
@@ -106,10 +112,17 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				datapoint.Timestamp = &timestamp
 				datapoints = append(datapoints, datapoint)
 				currentMetricsNum++
-				// FIXME - heuristic that 10 is low enough to be accepted by OpenTSDB
-				if (currentMetricsNum%10 == 0) || idx == num-1 {
+				// FIXME - heuristic that 10 is low enough to be accepted by OpenTSDB or env variable STATSDAEMON_MAXMETRICS
+				if (currentMetricsNum%maxMetrics == 0) || idx == num-1 {
 					log.Printf("currentMetricsNum: %d", currentMetricsNum)
-					_, err = TSDB.Put(datapoints)
+					out, err := TSDB.Put(datapoints)
+					if len(out.Errors) > 0 || err != nil {
+						sout := []string{}
+						for _, elem := range out.Errors {
+							sout = append(sout, elem.Error)
+						}
+						log.Printf("OpenTSDB.Put return: %s, error: %s", strings.Join(sout, "; "), err)
+					}
 					if err != nil {
 						return err
 					}
