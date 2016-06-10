@@ -52,7 +52,6 @@ type ConfigApp struct {
 	OpenTSDBAddress   string      `yaml:"opentsdb"`
 	FlushInterval     int64       `yaml:"flush-interval"`
 	LogLevel          string      `yaml:"log-level"`
-	ShowVersion       bool        `yaml:"-"`
 	DeleteGauges      bool        `yaml:"delete-gauges"`
 	ResetCounters     bool        `yaml:"reset-counters"`
 	PersistCountKeys  int64       `yaml:"persist-count-keys"`
@@ -61,6 +60,7 @@ type ConfigApp struct {
 	Prefix            string      `yaml:"prefix"`
 	ExtraTags         string      `yaml:"extra-tags"`
 	PercentThreshold  Percentiles `yaml:"percent-threshold"` // `yaml:"percent-threshold,omitempty"`
+	ShowVersion       bool        `yaml:"-"`
 	PrintConfig       bool        `yaml:"-"`
 	LogName           string      `yaml:"log-name"`
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
@@ -150,8 +150,15 @@ func readConfig(parse bool) {
 				fmt.Printf("Error loading config file: %s\n", err)
 			} else {
 				// set configs read form YAML file
+
+				// save 2 flags
+				tmpConfig := Config
 				// Overwites flags
 				Config = ConfigYAML
+				// restore 2 flags
+				Config.ShowVersion = tmpConfig.ShowVersion
+				Config.PrintConfig = tmpConfig.PrintConfig
+
 			}
 		}
 
