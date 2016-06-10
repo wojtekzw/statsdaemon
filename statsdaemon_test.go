@@ -18,7 +18,7 @@ import (
 )
 
 var commonPercentiles = Percentiles{
-	&Percentile{
+	Percentile{
 		99,
 		"99",
 	},
@@ -643,7 +643,7 @@ func TestProcessTimersUpperPercentile(t *testing.T) {
 
 	var buffer bytes.Buffer
 	num := processTimers(&buffer, now, Percentiles{
-		&Percentile{
+		Percentile{
 			75,
 			"75",
 		},
@@ -663,7 +663,7 @@ func TestProcessTimesLowerPercentile(t *testing.T) {
 
 	var buffer bytes.Buffer
 	num := processTimers(&buffer, now, Percentiles{
-		&Percentile{
+		Percentile{
 			-75,
 			"-75",
 		},
