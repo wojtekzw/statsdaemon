@@ -305,15 +305,15 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		for _, pct := range pctls {
 			if len(timer) > 1 {
 				var abs float64
-				if pct.float >= 0 {
-					abs = pct.float
+				if pct.Float >= 0 {
+					abs = pct.Float
 				} else {
-					abs = 100 + pct.float
+					abs = 100 + pct.Float
 				}
 				// poor man's math.Round(x):
 				// math.Floor(x + 0.5)
 				indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
-				if pct.float >= 0 {
+				if pct.Float >= 0 {
 					indexOfPerc-- // index offset=0
 				}
 				maxAtThreshold = timer[indexOfPerc]
@@ -321,14 +321,14 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 
 			var tmpl string
 			var pctstr string
-			if pct.float >= 0 {
+			if pct.Float >= 0 {
 				// tmpl = "%s.upper_%s%s %f %d\n"
 				tmpl = "%s.upper_%s%s%s"
-				pctstr = pct.str
+				pctstr = pct.Str
 			} else {
 				// tmpl = "%s.lower_%s%s %f %d\n"
 				tmpl = "%s.lower_%s%s%s"
-				pctstr = pct.str[1:]
+				pctstr = pct.Str[1:]
 			}
 			sep := ""
 			if len(fullNormalizedTags) > 0 {

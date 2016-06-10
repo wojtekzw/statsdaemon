@@ -60,7 +60,7 @@ type ConfigApp struct {
 	StoreDb           string      `yaml:"store-db"`
 	Prefix            string      `yaml:"prefix"`
 	ExtraTags         string      `yaml:"extra-tags"`
-	PercentThreshold  Percentiles `yaml:"-"` // `yaml:"percent-threshold,omitempty"`
+	PercentThreshold  Percentiles `yaml:"percent-threshold"` // `yaml:"percent-threshold,omitempty"`
 	PrintConfig       bool        `yaml:"-"`
 	LogName           string      `yaml:"log-name"`
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
@@ -101,10 +101,15 @@ func readConfig(parse bool) {
 	ConfigYAML.Prefix = ""
 	ConfigYAML.ExtraTags = ""
 	ConfigYAML.PercentThreshold = Percentiles{}
+	// Percentiles{{Float: 50.0, Str: "50"}, {Float: 80.0, Str: "80"}, {Float: 90.0, Str: "90"}, {Float: 95.0, Str: "95"}}
 	ConfigYAML.PrintConfig = false
 	ConfigYAML.LogName = "stdout"
 	ConfigYAML.LogToSyslog = true
 	ConfigYAML.SyslogUDPAddress = "localhost:514"
+
+	Config = ConfigYAML
+
+	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
 
 	configFile = flag.String("config", "", "Configuration file name (warning not error if not exists). Standard: "+configPath)
 	flag.StringVar(&Config.UDPServiceAddress, "udp-addr", ConfigYAML.UDPServiceAddress, "UDP listen service address")
@@ -124,7 +129,7 @@ func readConfig(parse bool) {
 	flag.StringVar(&Config.StoreDb, "store-db", ConfigYAML.StoreDb, "Name of database for permanent counters storage (for conversion from rate to counter)")
 	flag.StringVar(&Config.Prefix, "prefix", ConfigYAML.Prefix, "Prefix for all stats")
 	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1 tag2=value2")
-	// flag.Var(&Config.PercentThreshold, "percent-threshold", "Percentile calculation for timers (0-100, may be given multiple times)")
+	flag.Var(&Config.PercentThreshold, "percent-threshold", "Percentile calculation for timers (0-100, may be given multiple times)")
 	flag.BoolVar(&Config.PrintConfig, "print-config", ConfigYAML.PrintConfig, "Print config in YAML format")
 	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If \"stdout\" than logs to stdout.If empty logs go to /dev/null")
 	flag.BoolVar(&Config.LogToSyslog, "log-to-syslopg", ConfigYAML.LogToSyslog, "Log to syslog")
@@ -132,8 +137,6 @@ func readConfig(parse bool) {
 	if parse {
 		flag.Parse()
 	}
-
-	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
 
 	if len(*configFile) > 0 {
 		if _, err = os.Stat(*configFile); os.IsNotExist(err) {

@@ -7,12 +7,12 @@ import (
 )
 
 // Percentiles - slice of percentile with name
-type Percentiles []*Percentile
+type Percentiles []Percentile
 
 // Percentile - percentile - float with percentile name
 type Percentile struct {
-	float float64
-	str   string
+	Float float64 `yaml:"value"`
+	Str   string  `yaml:"name"`
 }
 
 // Set percentile structure
@@ -21,11 +21,11 @@ func (a *Percentiles) Set(s string) error {
 	if err != nil {
 		return err
 	}
-	*a = append(*a, &Percentile{f, strings.Replace(s, ".", "_", -1)})
+	*a = append(*a, Percentile{f, strings.Replace(s, ".", "_", -1)})
 	return nil
 }
 func (p *Percentile) String() string {
-	return p.str
+	return p.Str
 }
 func (a *Percentiles) String() string {
 	return fmt.Sprintf("%v", *a)
