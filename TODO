@@ -1,7 +1,7 @@
 1. fix bucket and tags association
 2. config in YAML format - DONE
 3. refactor code to depend on Packet not on bytes.Buffer
-4. Fix Percentiles
+4. Fix Percentiles - DONE
 5. Rename project
 6. Build deb package
 7. Refactor error messages
