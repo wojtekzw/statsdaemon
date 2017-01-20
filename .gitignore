@@ -1,3 +1,5 @@
 statsdaemon
 dist
 .idea
+statsdaemon.iml
+tools/
