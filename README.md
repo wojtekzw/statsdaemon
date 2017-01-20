@@ -1,5 +1,7 @@
 statsdaemon
 ==========
+[![CircleCI](https://circleci.com/gh/wojtekzw/statsdaemon.svg?style=svg)](https://circleci.com/gh/wojtekzw/statsdaemon)
+
 
 Port of Etsy's statsd server (https://github.com/etsy/statsd), written in Go (based on
   [szaydel/statsdaemon](https://github.com/szaydel/statsdaemon) and changes from
@@ -7,8 +9,8 @@ Port of Etsy's statsd server (https://github.com/etsy/statsd), written in Go (ba
   with many enhancements (e.g. floats in timers and gauges, sets, key/values, absolute counters, many different backends)
 
 Supports
-
-Metrics types
+--------
+Metrics types:
 * Timers (with optional percentiles)
 * Counters (positive and negative with optional sampling) + ability send counter as rate(default) or absolute counter (using local BoltDB)
 * Gauges (including relative operations)
@@ -17,12 +19,12 @@ Metrics types
 
 Float numbers are supported in Timers and  Gauges
 
-Backend supported
+Backends supported:
 * Graphite
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
 * OpenTSDB
 
-Others
+Other:
 * Read configuration from YAML file
 * Ability to save configuration to YAML file
 * UDP and TCP listeners
