@@ -7,4 +7,5 @@
 7. Refactor error messages
 8. Count different metrics types separately
 9. Enhance test for all new features
-10. Rethink parsing - what should be sanitized automatically and what should be an error. Think about gathering stats even in case name is wrong
+10. Rethink parsing - what should be sanitized automatically and what should be an error.
+    Think about gathering stats even in case name is wrong
