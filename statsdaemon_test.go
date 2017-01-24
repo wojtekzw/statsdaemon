@@ -15,6 +15,9 @@ import (
 	"github.com/bmizerany/assert"
 	"github.com/boltdb/bolt"
 	flag "github.com/ogier/pflag"
+	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
+	"fmt"
+	"log/syslog"
 )
 
 var commonPercentiles = Percentiles{
@@ -860,12 +863,13 @@ func Benchmark100CountersWith1000IncrementsEach(t *testing.B) {
 
 }
 
-func BenchmarkParseLine(b *testing.B) {
+func BenchmarkParseLineRate(b *testing.B) {
 	d := []byte("a.key.with-0.dash:4|c|@0.5")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}
 }
+
 
 func BenchmarkParseLineWith3Tags(b *testing.B) {
 	d := []byte("a.key.with-0.dash.^host=dev.^env=prod.^product=sth:4|c|@0.5")
@@ -873,3 +877,32 @@ func BenchmarkParseLineWith3Tags(b *testing.B) {
 		parseLine(d)
 	}
 }
+func BenchmarkParseLineWith1TagCorrect(b *testing.B) {
+	d := []byte("cache.hit.^con=en:4|c")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+func BenchmarkParseLineWith1TagError(b *testing.B) {
+	d := []byte("cache.hit.^con=en::4|c")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+
+func BenchmarkParseLineWith1TagErrorAndSyslog(b *testing.B) {
+	hook, err := logrus_syslog.NewSyslogHook("", "", syslog.LOG_DEBUG | syslog.LOG_LOCAL3, "statsdaemon_test")
+	if err != nil {
+		fmt.Printf("Unable to connect to syslog daemon: %s\n", err)
+	} else {
+		log.AddHook(hook)
+		log.SetFormatter(&log.JSONFormatter{})
+	}
+
+	b.ResetTimer()
+	d := []byte("cache.hit.^con=en::4|c")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+
