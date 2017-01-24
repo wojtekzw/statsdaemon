@@ -1,0 +1,7 @@
+# circle.yml
+dependencies:
+  pre:
+    - go get -u github.com/kardianos/govendor
+test:
+  override:
+    - govendor test -v +local
