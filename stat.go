@@ -56,7 +56,7 @@ func (ds *DaemonStat) ErrorIncr() {
 	}
 }
 
-func (ds *DaemonStat) WriteMerics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
+func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
 
 	var ok bool
 

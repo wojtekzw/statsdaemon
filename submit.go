@@ -19,7 +19,7 @@ func submit(deadline time.Time, backend string) error {
 
 	// Prepare internal stats (queueLen is set at the end of func)
 	Stat.ProcessStats()
-	Stat.WriteMerics(counters, gauges, timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
+	Stat.WriteMetrics(counters, gauges, timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
 	logCtx.WithField("after", "ProcessStats").Infof("%s", Stat.String())
 	Stat.PointsCounter = 0 // reset counter after each interval
 
