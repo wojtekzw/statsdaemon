@@ -22,7 +22,6 @@ func StructPrettyPrint(s interface{}) string {
 func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 	logCtx := log.WithFields(log.Fields{
 		"in":  "openTSDB",
-		"ctx": "Metric format error",
 	})
 
 	maxMetrics := 10
@@ -36,7 +35,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 		server := tsdb.Server{}
 		serverAdress := strings.Split(config.OpenTSDBAddress, ":")
 		if len(serverAdress) != 2 {
-			return fmt.Errorf("Incorrect openTSDB server address %v", serverAdress)
+			return fmt.Errorf("Incorrect OpenTSDB server address %v", serverAdress)
 		}
 		port, err := strconv.ParseUint(serverAdress[1], 10, 32)
 		if err != nil {
@@ -66,7 +65,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				val, err := strconv.ParseFloat(data[1], 64)
 				if err != nil {
 					// continue on error in one metric
-					logCtx.WithField("after", "ParseFloat").Errorf("Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
+					logCtx.Errorf("Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
 					Stat.ErrorIncr()
 					continue
 				}
@@ -75,7 +74,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				// parse timestamp
 				err = timestamp.Parse(data[2])
 				if err != nil {
-					logCtx.WithField("after", "Parse").Errorf("Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
+					logCtx.Errorf("Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
 					Stat.ErrorIncr()
 					continue
 				}
@@ -84,7 +83,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				metricName := data[0]
 				err = metric.Set(metricName)
 				if err != nil {
-					logCtx.WithField("after", "Set").Errorf("Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
+					logCtx.Errorf("Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
 					Stat.ErrorIncr()
 					continue
 				}
@@ -96,7 +95,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 							strSlice := strings.Split(e, "=")
 							if len(strSlice) == 2 {
 								if strSlice[0] == "" || strSlice[1] == "" {
-									logCtx.WithField("after", "Split").Errorf("Tag  expected. Got: %s in line \"%s\"", e, data)
+									logCtx.Errorf("Tag  expected. Got: %s in line \"%s\"", e, data)
 									Stat.ErrorIncr()
 									continue
 								}
@@ -114,14 +113,13 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				currentMetricsNum++
 				// FIXME - heuristic that 10 is low enough to be accepted by OpenTSDB or env variable STATSDAEMON_MAXMETRICS
 				if (currentMetricsNum%maxMetrics == 0) || idx == num-1 {
-					log.Printf("currentMetricsNum: %d", currentMetricsNum)
 					out, err := TSDB.Put(datapoints)
 					if len(out.Errors) > 0 || err != nil {
 						sout := []string{}
 						for _, elem := range out.Errors {
 							sout = append(sout, elem.Error)
 						}
-						log.Printf("OpenTSDB.Put return: %s, error: %s", strings.Join(sout, "; "), err)
+						logCtx.Errorf("OpenTSDB.Put return: %s, error: %s", strings.Join(sout, "; "), err)
 					}
 					if err != nil {
 						return err
@@ -129,25 +127,16 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 					datapoints = []tsdb.DataPoint{}
 				}
 			} else {
-				logCtx.WithField("after", "Split").Errorf("Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
+				logCtx.Errorf("Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
 				Stat.ErrorIncr()
 			}
 
 		}
 
-		// log.Printf("datapoints len: %d, data: %s\n", len(datapoints), StructPrettyPrint(datapoints))
 
-		// TSDB.Servers = append(TSDB.Servers, server)
-		// _, err = TSDB.Put(datapoints)
-		// if err != nil {
-		// 	return err
-		// }
 
-		logCtx = log.WithFields(log.Fields{
-			"in":  "openTSDB",
-			"ctx": "success writing to OpenTSDB",
-		})
-		logCtx.WithField("after", "Put").Infof("sent %d stats to %s", currentMetricsNum, config.OpenTSDBAddress)
+
+		logCtx.Infof("sent %d stats to %s", currentMetricsNum, config.OpenTSDBAddress)
 
 		return nil
 

@@ -65,6 +65,7 @@ type ConfigApp struct {
 	LogName           string      `yaml:"log-name"`
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
 	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
+	DisableStatSend      bool        `yaml:"disable-stat-send"`
 	// private - calculated below
 	ExtraTagsHash    map[string]string `yaml:"-"`
 	InternalLogLevel log.Level         `yaml:"-"`
@@ -79,6 +80,9 @@ var (
 
 	signalchan chan os.Signal // for signal exits
 )
+
+
+//STATSDAEMON_MAXMETRICS == 10 (ev may be used to change max metrics to OpenTSDB)
 
 func readConfig(parse bool) {
 	var err error
@@ -106,6 +110,7 @@ func readConfig(parse bool) {
 	ConfigYAML.LogName = "stdout"
 	ConfigYAML.LogToSyslog = true
 	ConfigYAML.SyslogUDPAddress = "localhost:514"
+	ConfigYAML.DisableStatSend = false
 
 	Config = ConfigYAML
 
@@ -134,6 +139,7 @@ func readConfig(parse bool) {
 	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If \"stdout\" than logs to stdout.If empty logs go to /dev/null")
 	flag.BoolVar(&Config.LogToSyslog, "log-to-syslopg", ConfigYAML.LogToSyslog, "Log to syslog")
 	flag.StringVar(&Config.SyslogUDPAddress, "syslog-udp-address", ConfigYAML.SyslogUDPAddress, "Syslog address with port number eg. localhost:514. If empty log to unix socket")
+	flag.BoolVar(&Config.DisableStatSend, "disable-stat-send", ConfigYAML.DisableStatSend, "Disable internal stat send to backendg")
 	if parse {
 		flag.Parse()
 	}
@@ -270,6 +276,9 @@ func main() {
 		}
 	}
 
+
+	log.SetFormatter(&log.TextFormatter{DisableColors: true})
+
 	if Config.LogName == "" {
 		log.SetOutput(ioutil.Discard)
 	}
@@ -290,8 +299,6 @@ func main() {
 	if err != nil {
 		log.WithFields(log.Fields{
 			"in":    "main",
-			"after": "Open",
-			"ctx":   "Bolt DB open",
 		}).Fatalf("%s", err)
 	}
 	// dbHandle.NoSync = true
@@ -328,8 +335,6 @@ func validateConfig() error {
 func udpListener() {
 	logCtx := log.WithFields(log.Fields{
 		"in":    "udpListener",
-		"after": "ResolveUDPAddr",
-		"ctx":   "Start UDP listener",
 	})
 
 	address, err := net.ResolveUDPAddr("udp", Config.UDPServiceAddress)
@@ -361,8 +366,6 @@ func udpListener() {
 func tcpListener() {
 	logCtx := log.WithFields(log.Fields{
 		"in":    "tcpListener",
-		"after": "ResolveTCPAddr",
-		"ctx":   "Start TCP listener",
 	})
 	address, err := net.ResolveTCPAddr("tcp", Config.TCPServiceAddress)
 	if err != nil {
@@ -371,15 +374,9 @@ func tcpListener() {
 	logCtx.Infof("listening on %s", address)
 	listener, err := net.ListenTCP("tcp", address)
 	if err != nil {
-		logCtx.WithField("after", "ListenTCP").Fatalf("%s", err)
+		logCtx.Fatalf("%s", err)
 	}
 	defer listener.Close()
-
-	logCtx = log.WithFields(log.Fields{
-		"in":    "tcpListener",
-		"after": "AcceptTCP",
-		"ctx":   "Accept TCP loop",
-	})
 
 	for {
 		conn, err := listener.AcceptTCP()
@@ -393,8 +390,7 @@ func tcpListener() {
 func monitor() {
 	logCtx := log.WithFields(log.Fields{
 		"in":    "monitor",
-		"after": "submit",
-		"ctx":   "Main processing loop",
+
 	})
 
 	period := time.Duration(Config.FlushInterval) * time.Second
@@ -402,7 +398,7 @@ func monitor() {
 	for {
 		select {
 		case sig := <-signalchan:
-			logCtx.WithField("after", "signal").Infof("Caught signal \"%v\"... shutting down", sig)
+			logCtx.Infof("Caught signal \"%v\"... shutting down", sig)
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
 				logCtx.Errorf("%s", err)
 				Stat.ErrorIncr()

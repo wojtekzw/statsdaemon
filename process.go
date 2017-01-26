@@ -85,7 +85,6 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	var ret, val string
 	logCtx := log.WithFields(log.Fields{
 		"in":  "formatMetricOutput",
-		"ctx": "Format default output",
 	})
 	val = ""
 	switch value.(type) {
@@ -96,13 +95,13 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	case float32, float64:
 		val = fmt.Sprintf("%f", value)
 	default:
-		logCtx.WithField("after", "default type").Errorf("Invalid type: %v", reflect.TypeOf(value))
+		logCtx.Errorf("Invalid type: %v", reflect.TypeOf(value))
 		Stat.ErrorIncr()
 	}
 
 	cleanBucket, localTags, err := parseBucketAndTags(bucket)
 	if err != nil {
-		logCtx.WithField("after", "parseBucketAndTags").Errorf("%s", err)
+		logCtx.Errorf("parseBucketAndTags error: %s", err)
 		Stat.ErrorIncr()
 	}
 
@@ -123,7 +122,6 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	default:
 		ret = "UNKNOWN_BACKEND"
 	}
-	logCtx.WithField("after", "format line").Debugf("%s", ret)
 	return ret
 }
 
@@ -138,7 +136,6 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 	)
 	logCtx := log.WithFields(log.Fields{
 		"in":  "processCounters",
-		"ctx": "calculate counters",
 	})
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
@@ -146,7 +143,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		if !reset {
 			startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 			if err != nil {
-				logCtx.WithField("after", "readMeasurePoint").Errorf("%s", err)
+				logCtx.Errorf("readMeasurePoint: %s", err)
 				Stat.ErrorIncr()
 			}
 		} else {
@@ -166,7 +163,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			//  save counter to Bolt
 			err = storeMeasurePoint(dbHandle, bucketName, bucket, nowCounter)
 			if err != nil {
-				logCtx.WithField("after", "storeMeasurePoint").Errorf("%s", err)
+				logCtx.Errorf("storeMeasurePoint: %s", err)
 				Stat.ErrorIncr()
 			}
 		}
@@ -180,7 +177,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			if !reset {
 				startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 				if err != nil {
-					logCtx.WithField("after", "readMeasurePoint").Errorf("%s", err)
+					logCtx.Errorf("readMeasurePoint: %s", err)
 					Stat.ErrorIncr()
 				}
 			} else {
@@ -276,7 +273,6 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 
 	logCtx := log.WithFields(log.Fields{
 		"in":  "processTimers",
-		"ctx": "calculate timers",
 	})
 	for bucket, timer := range timers {
 		bucketWithoutPostfix := bucket
@@ -297,7 +293,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		// remove tags form bucketWithoutPostfix
 		cleanBucket, localTags, err := parseBucketAndTags(bucketWithoutPostfix)
 		if err != nil {
-			logCtx.WithField("after", "parseBucketAndTags").Errorf("%s", err)
+			logCtx.Errorf("parseBucketAndTags: %s", err)
 			Stat.ErrorIncr()
 		}
 		fullNormalizedTags := normalizeTags(addTags(localTags, Config.ExtraTagsHash), tfDefault)

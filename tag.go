@@ -180,7 +180,6 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 
 	logCtx := log.WithFields(log.Fields{
 		"in":  "parseBucketAndTags",
-		"ctx": "parsePacket",
 	})
 
 	tags := make(map[string]string)
@@ -193,17 +192,17 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	}
 
 	if strings.IndexAny(tagsSlice[0], "=^") > -1 {
-		logCtx.WithField("after", "tag split").Errorf("Format error: Invalid tag format in \"%s\"", name)
+		logCtx.Errorf("Format error: Invalid tag format in \"%s\"", name)
 		Stat.ErrorIncr()
 		oldBucket := tagsSlice[0]
 		tagsSlice[0] = sanitizeBucket(tagsSlice[0])
-		logCtx.WithField("after", "sanitizeBucket").Errorf("Format error: Converting bucket name from  \"%s\" to \"%s\"", oldBucket, tagsSlice[0])
+		logCtx.Errorf("Format error: Converting bucket name from  \"%s\" to \"%s\"", oldBucket, tagsSlice[0])
 	}
 
 	for _, e := range tagsSlice[1:] {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			logCtx.WithField("after", "tag split").Errorf("Invalid tag format [%s] %v ", name, tagsSlice[1:])
+			logCtx.Errorf("Invalid tag format [%s] %v ", name, tagsSlice[1:])
 			Stat.ErrorIncr()
 		} else {
 			tags[tagAndVal[0]] = tagAndVal[1]
@@ -212,12 +211,3 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	return tagsSlice[0], tags, nil
 }
 
-// func main() {
-// 	a := map[string]string{"k20": "20", "a10": "10", "11": "11"}
-// 	fmt.Printf("MAIN: type %d %s\n", tfDefault, normalizeTags(a,tfDefault))
-// 	tfDefault = tfGraphite
-// 	fmt.Printf("MAIN: type %d %s\n", tfDefault, normalizeTags(a,tfDefault))
-// 	tfDefault = tfURI
-// 	fmt.Printf("MAIN: type %d %s\n", tfDefault, normalizeTags(a,tfDefault))
-//
-// }
