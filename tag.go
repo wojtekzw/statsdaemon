@@ -51,7 +51,6 @@ func tagsDelims(tf uint) (string, string, string) {
 
 	logCtx := log.WithFields(log.Fields{
 		"in":  "tagsDelims",
-		"ctx": "return right tag delimeters",
 	})
 	// checking tf in default in switch is too late
 	// doing it now
