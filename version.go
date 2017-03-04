@@ -1,4 +1,10 @@
 package main
 
-// VERSION - to be set on compilation
-const VERSION = "0.9.9"
+
+var (
+	StatsdaemonVersion string = "0.9.10"
+	GitHash string = "empty"
+	BuildDate string = "empty"
+
+)
+

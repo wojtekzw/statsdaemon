@@ -390,7 +390,7 @@ func TestMultiLine(t *testing.T) {
 
 func TestPacketHandlerReceiveCounter(t *testing.T) {
 
-	Stat.PointsCounter = 0
+	Stat.curStat.PointsCounter = 0
 	Config.ResetCounters = true
 
 	p := &Packet{
@@ -400,10 +400,10 @@ func TestPacketHandlerReceiveCounter(t *testing.T) {
 		Sampling: float32(1),
 	}
 	packetHandler(p)
-	assert.Equal(t, Stat.PointsCounter, int64(1))
+	assert.Equal(t, Stat.curStat.PointsCounter, int64(1))
 
 	packetHandler(p)
-	assert.Equal(t, Stat.PointsCounter, int64(2))
+	assert.Equal(t, Stat.curStat.PointsCounter, int64(2))
 }
 
 func TestPacketHandlerCount(t *testing.T) {

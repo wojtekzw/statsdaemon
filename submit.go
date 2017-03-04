@@ -16,7 +16,7 @@ func submit(deadline time.Time, backend string) error {
 		"in":  "submit",
 	})
 
-	// Prepare internal stats (queueLen is set at the end of func)
+	// Prepare internal stats (make a copy, reset current counters)
 	Stat.ProcessStats()
 	if !Config.DisableStatSend {
 		Stat.WriteMetrics(counters, gauges, timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
@@ -25,9 +25,6 @@ func submit(deadline time.Time, backend string) error {
 		logCtx.Debugf("%s", Stat.String())
 	}
 
-	Stat.PointsCounter = 0 // reset counter after each interval
-
-	// fmt.Printf("Len size - start submit: %d\n", len(In))
 	// Universal format in buffer
 	num += processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
 	num += processGauges(&buffer, now, backend)
@@ -35,10 +32,6 @@ func submit(deadline time.Time, backend string) error {
 	num += processSets(&buffer, now, backend)
 	num += processKeyValue(&buffer, now, backend)
 
-	if num == 0 {
-		Stat.QueueLen = int64(len(In))
-		return nil
-	}
 
 	if Config.InternalLogLevel >= log.DebugLevel {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
@@ -85,9 +78,6 @@ func submit(deadline time.Time, backend string) error {
 	default:
 		logCtx.Fatalf("Invalid backend %s. Exiting...\n", backend)
 	}
-
-	//  Internal stats
-	Stat.QueueLen = int64(len(In))
 
 	return nil
 }

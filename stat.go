@@ -6,14 +6,21 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/shirou/gopsutil/process"
+	"sync"
 )
 
-type DaemonStat struct {
+type internalDaemonStat struct {
 	PointsCounter int64
 	PointsRate    float64
 	ErrorsCounter int64
 	MemGauge      *process.MemoryInfoStat
 	QueueLen      int64
+}
+
+type DaemonStat struct {
+	sync.RWMutex
+	curStat internalDaemonStat
+	savedStat internalDaemonStat
 	Interval      int64
 }
 
@@ -22,18 +29,19 @@ func (ds *DaemonStat) GlobalVarsSizeToString() string {
 		len(counters), len(gauges), len(lastGaugeValue), len(timers), len(countInactivity), len(sets), len(keys))
 	return s
 }
+
+
 func (ds *DaemonStat) String() string {
+	s := fmt.Sprintf("PointsCounter: %d ops, ", ds.savedStat.PointsCounter)
+	s = s + fmt.Sprintf("PointsRate: %.2f ops/s, ", ds.savedStat.PointsRate)
+	s = s + fmt.Sprintf("ErrorsCounter: %d errors, ", ds.savedStat.ErrorsCounter)
 
-	s := fmt.Sprintf("PointsCounter: %d ops, ", ds.PointsCounter)
-	s = s + fmt.Sprintf("PointsRate: %.2f ops/s, ", ds.PointsRate)
-	s = s + fmt.Sprintf("ErrorsCounter: %d errors, ", ds.ErrorsCounter)
-
-	if ds.MemGauge != nil {
-		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.MemGauge.RSS)/(1024*1024))
-		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.MemGauge.VMS)/(1024*1024))
-		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.MemGauge.Swap)/(1024*1024))
+	if ds.savedStat.MemGauge != nil {
+		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS)/(1024*1024))
+		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS)/(1024*1024))
+		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap)/(1024*1024))
 	}
-	s = s + fmt.Sprintf("QueueLen: %d, ", ds.QueueLen)
+	s = s + fmt.Sprintf("QueueLen: %d, ", ds.savedStat.QueueLen)
 	s = s + ds.GlobalVarsSizeToString()
 	return s
 }
@@ -43,16 +51,20 @@ func (ds *DaemonStat) Print() {
 }
 
 func (ds *DaemonStat) PointIncr() {
-	ds.PointsCounter++
-	if ds.PointsCounter < 0 {
-		ds.PointsCounter = 0
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.PointsCounter++
+	if ds.curStat.PointsCounter < 0 {
+		ds.curStat.PointsCounter = 0
 	}
 }
 
 func (ds *DaemonStat) ErrorIncr() {
-	ds.ErrorsCounter++
-	if ds.ErrorsCounter < 0 {
-		ds.ErrorsCounter = 0
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.ErrorsCounter++
+	if ds.curStat.ErrorsCounter < 0 {
+		ds.curStat.ErrorsCounter = 0
 	}
 }
 
@@ -69,31 +81,31 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	if !ok {
 		countersMap[pointsCounter] = 0
 	}
-	countersMap[pointsCounter] += ds.PointsCounter
+	countersMap[pointsCounter] += ds.savedStat.PointsCounter
 
 	errorsCounter := makeBucketName(globalPrefix, metricNamePrefix, "error.count", extraTagsStr)
 	_, ok = countersMap[errorsCounter]
 	if !ok {
 		countersMap[errorsCounter] = 0
 	}
-	countersMap[errorsCounter] += ds.ErrorsCounter
+	countersMap[errorsCounter] += ds.savedStat.ErrorsCounter
 
 	// Gauges
 	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.rate", extraTagsStr)
-	gaugesMap[pointsRate] = ds.PointsRate
+	gaugesMap[pointsRate] = ds.savedStat.PointsRate
 
 	queueLen := makeBucketName(globalPrefix, metricNamePrefix, "queue.len", extraTagsStr)
-	gaugesMap[queueLen] = float64(ds.QueueLen)
+	gaugesMap[queueLen] = float64(ds.savedStat.QueueLen)
 
-	if ds.MemGauge != nil {
+	if ds.savedStat.MemGauge != nil {
 		memRSS := makeBucketName(globalPrefix, metricNamePrefix, "memory.rss", extraTagsStr)
-		gaugesMap[memRSS] = float64(ds.MemGauge.RSS)
+		gaugesMap[memRSS] = float64(ds.savedStat.MemGauge.RSS)
 
 		memVMS := makeBucketName(globalPrefix, metricNamePrefix, "memory.vms", extraTagsStr)
-		gaugesMap[memVMS] = float64(ds.MemGauge.VMS)
+		gaugesMap[memVMS] = float64(ds.savedStat.MemGauge.VMS)
 
 		memSwap := makeBucketName(globalPrefix, metricNamePrefix, "memory.swap", extraTagsStr)
-		gaugesMap[memSwap] = float64(ds.MemGauge.Swap)
+		gaugesMap[memSwap] = float64(ds.savedStat.MemGauge.Swap)
 	}
 
 	return nil
@@ -101,15 +113,27 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 }
 
 func (ds *DaemonStat) ProcessStats() {
-	ds.PointsRate = float64(ds.PointsCounter) / float64(ds.Interval)
+
 	p, err := process.NewProcess(int32(os.Getpid()))
+
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+
 	if err == nil {
-		ds.MemGauge, _ = p.MemoryInfo()
+		ds.curStat.MemGauge, _ = p.MemoryInfo()
 	} else {
-		ds.MemGauge = nil
+		ds.curStat.MemGauge = nil
 		log.Errorf("%v", err)
 		Stat.ErrorIncr()
 	}
+
+	ds.curStat.PointsRate = float64(ds.curStat.PointsCounter) / float64(ds.Interval)
+	// FIXME using GLOBAL channel In
+	ds.curStat.QueueLen = int64(len(In))
+
+	ds.savedStat = ds.curStat
+	ds.curStat = internalDaemonStat{}
+
 }
 
 func makeBucketName(globalPrefix string, metricNamePrefix string, metricName string, extraTagsStr string) string {

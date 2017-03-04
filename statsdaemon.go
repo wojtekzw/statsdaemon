@@ -234,7 +234,7 @@ func main() {
 	}
 
 	if Config.ShowVersion {
-		fmt.Printf("statsdaemon v%s (built w/%s)\n", VERSION, runtime.Version())
+		fmt.Printf("statsdaemon v%s (built w/%s)\nBuildDate: %s\nGitHash: %s\n", StatsdaemonVersion, runtime.Version(),BuildDate,GitHash)
 		os.Exit(0)
 	}
 
