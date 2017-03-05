@@ -33,24 +33,6 @@
 			"revisionTime": "2016-05-16T15:40:46Z"
 		},
 		{
-			"checksumSHA1": "iHUNCL1pFrH1LSBXIQyhPqRTyeI=",
-			"path": "github.com/cactus/go-statsd-client/statsd",
-			"revision": "91c326c3f7bd20f0226d3d1c289dd9f8ce28d33d",
-			"revisionTime": "2016-05-30T18:57:10Z"
-		},
-		{
-			"checksumSHA1": "fQ1xXbN8ko/h2CTc7ImVaf+oV5c=",
-			"path": "github.com/djherbis/stow",
-			"revision": "52774f0516156e0e23216283da682d5b668bc1f3",
-			"revisionTime": "2016-03-05T20:40:48Z"
-		},
-		{
-			"checksumSHA1": "z+oCk5hlJ1Z0B6w/IeJyf43/pTA=",
-			"path": "github.com/goware/throttler",
-			"revision": "eea8b956e6dc81fc9dd984a1447fae67a4d5ebc6",
-			"revisionTime": "2016-01-20T15:47:01Z"
-		},
-		{
 			"checksumSHA1": "tVfmtFMvfZdKSyw21GtbxBRpC1s=",
 			"path": "github.com/jinzhu/configor",
 			"revision": "fb7a3183cd987802d006408fe3a4a9e1f6002ece",
@@ -73,12 +55,6 @@
 			"path": "github.com/mapmyfitness/go-opentsdb/tsdb",
 			"revision": "bd920af873d332bc2891a8fae9f0472a109d3be7",
 			"revisionTime": "2015-03-18T03:24:43Z"
-		},
-		{
-			"checksumSHA1": "3EE72oPk9MsIzoLUeB/RQNABd3c=",
-			"path": "github.com/montanaflynn/stats",
-			"revision": "60dcacf48f43d6dd654d0ed94120ff5806c5ca5c",
-			"revisionTime": "2016-05-05T08:52:09Z"
 		},
 		{
 			"checksumSHA1": "jxORqtJ6VSFi4F45Wg1wxc2aUsc=",
