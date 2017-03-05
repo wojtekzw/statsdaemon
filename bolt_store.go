@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/boltdb/bolt"
 	"errors"
+	"github.com/boltdb/bolt"
 )
 
 // MeasurePoint - struct for saving do permanent storage (eg. Bolt)
@@ -17,7 +17,7 @@ var bucketName = "counters"
 func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePoint) error {
 	var jsonPoint []byte
 
-	if err := checkNames(bucketName,name);  err != nil {
+	if err := checkNames(bucketName, name); err != nil {
 		return err
 	}
 	err := db.Update(func(tx *bolt.Tx) error {
@@ -45,7 +45,7 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 func readMeasurePoint(db *bolt.DB, bucketName string, name string) (MeasurePoint, error) {
 
 	outMeasurePoint := MeasurePoint{}
-	if err := checkNames(bucketName,name);  err != nil {
+	if err := checkNames(bucketName, name); err != nil {
 		return outMeasurePoint, err
 	}
 	err := db.View(func(tx *bolt.Tx) error {

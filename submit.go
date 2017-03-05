@@ -13,7 +13,7 @@ func submit(deadline time.Time, backend string) error {
 
 	now := time.Now().Unix()
 	logCtx := log.WithFields(log.Fields{
-		"in":  "submit",
+		"in": "submit",
 	})
 
 	// Prepare internal stats (make a copy, reset current counters)
@@ -31,7 +31,6 @@ func submit(deadline time.Time, backend string) error {
 	num += processTimers(&buffer, now, Config.PercentThreshold, backend)
 	num += processSets(&buffer, now, backend)
 	num += processKeyValue(&buffer, now, backend)
-
 
 	if Config.InternalLogLevel >= log.DebugLevel {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {

@@ -65,7 +65,7 @@ type ConfigApp struct {
 	LogName           string      `yaml:"log-name"`
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
 	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
-	DisableStatSend      bool        `yaml:"disable-stat-send"`
+	DisableStatSend   bool        `yaml:"disable-stat-send"`
 	// private - calculated below
 	ExtraTagsHash    map[string]string `yaml:"-"`
 	InternalLogLevel log.Level         `yaml:"-"`
@@ -80,7 +80,6 @@ var (
 
 	signalchan chan os.Signal // for signal exits
 )
-
 
 //STATSDAEMON_MAXMETRICS == 10 (ev may be used to change max metrics to OpenTSDB)
 
@@ -234,7 +233,7 @@ func main() {
 	}
 
 	if Config.ShowVersion {
-		fmt.Printf("statsdaemon v%s (built w/%s)\nBuildDate: %s\nGitHash: %s\n", StatsdaemonVersion, runtime.Version(),BuildDate,GitHash)
+		fmt.Printf("statsdaemon v%s (built w/%s)\nBuildDate: %s\nGitHash: %s\n", StatsdaemonVersion, runtime.Version(), BuildDate, GitHash)
 		os.Exit(0)
 	}
 
@@ -276,7 +275,6 @@ func main() {
 		}
 	}
 
-
 	log.SetFormatter(&log.TextFormatter{DisableColors: true})
 
 	if Config.LogName == "" {
@@ -290,6 +288,7 @@ func main() {
 	// }
 
 	// Stat
+	Stat.Init()
 	Stat.Interval = Config.FlushInterval
 
 	signalchan = make(chan os.Signal, 1)
@@ -298,7 +297,7 @@ func main() {
 	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
 		log.WithFields(log.Fields{
-			"in":    "main",
+			"in": "main",
 		}).Fatalf("%s", err)
 	}
 	// dbHandle.NoSync = true
@@ -334,7 +333,7 @@ func validateConfig() error {
 
 func udpListener() {
 	logCtx := log.WithFields(log.Fields{
-		"in":    "udpListener",
+		"in": "udpListener",
 	})
 
 	address, err := net.ResolveUDPAddr("udp", Config.UDPServiceAddress)
@@ -365,7 +364,7 @@ func udpListener() {
 
 func tcpListener() {
 	logCtx := log.WithFields(log.Fields{
-		"in":    "tcpListener",
+		"in": "tcpListener",
 	})
 	address, err := net.ResolveTCPAddr("tcp", Config.TCPServiceAddress)
 	if err != nil {
@@ -389,8 +388,7 @@ func tcpListener() {
 
 func monitor() {
 	logCtx := log.WithFields(log.Fields{
-		"in":    "monitor",
-
+		"in": "monitor",
 	})
 
 	period := time.Duration(Config.FlushInterval) * time.Second

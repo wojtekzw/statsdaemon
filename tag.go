@@ -50,7 +50,7 @@ func tagsDelims(tf uint) (string, string, string) {
 	)
 
 	logCtx := log.WithFields(log.Fields{
-		"in":  "tagsDelims",
+		"in": "tagsDelims",
 	})
 	// checking tf in default in switch is too late
 	// doing it now
@@ -178,7 +178,7 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	// FIXME : add other formats
 
 	logCtx := log.WithFields(log.Fields{
-		"in":  "parseBucketAndTags",
+		"in": "parseBucketAndTags",
 	})
 
 	tags := make(map[string]string)
@@ -209,4 +209,3 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 	}
 	return tagsSlice[0], tags, nil
 }
-

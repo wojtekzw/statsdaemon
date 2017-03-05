@@ -145,7 +145,7 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 func parseLine(line []byte) *Packet {
 
 	logCtx := log.WithFields(log.Fields{
-		"in":  "parseLine",
+		"in": "parseLine",
 	})
 
 	tagsFromBucketName := make(map[string]string)
@@ -165,7 +165,7 @@ func parseLine(line []byte) *Packet {
 		if len(split) == 3 && len(split[2]) > 0 && split[2][0] == '@' {
 			f64, err := strconv.ParseFloat(string(split[2][1:]), 32)
 			if err != nil {
-				logCtx.Errorf("Failed to ParseFloat %s (%s) in line '%s'", string(split[2][1:]), err,line)
+				logCtx.Errorf("Failed to ParseFloat %s (%s) in line '%s'", string(split[2][1:]), err, line)
 				Stat.ErrorIncr()
 				return nil
 			}
@@ -199,7 +199,7 @@ func parseLine(line []byte) *Packet {
 	case "c":
 		value, err = strconv.ParseInt(string(val), 10, 64)
 		if err != nil {
-			logCtx.Errorf("Failed to ParseInt %s - %s, raw bucket: %s, line: `%s`", string(val), err,name,line)
+			logCtx.Errorf("Failed to ParseInt %s - %s, raw bucket: %s, line: `%s`", string(val), err, name, line)
 			Stat.ErrorIncr()
 			return nil
 		}
@@ -224,7 +224,7 @@ func parseLine(line []byte) *Packet {
 
 		value, err = strconv.ParseFloat(s, 64)
 		if err != nil {
-			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err,name,line)
+			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
 			Stat.ErrorIncr()
 			return nil
 		}
@@ -235,14 +235,14 @@ func parseLine(line []byte) *Packet {
 	case "ms":
 		value, err = strconv.ParseFloat(string(val), 64)
 		if err != nil {
-			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err,name,line)
+			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
 			Stat.ErrorIncr()
 			return nil
 		}
 	case "kv":
 		value = string(val) // Key/value should not need transformation
 	default:
-		logCtx.Errorf("Unrecognized type code %q, raw bucket: %s, line: '%s'", typeCode, name,line)
+		logCtx.Errorf("Unrecognized type code %q, raw bucket: %s, line: '%s'", typeCode, name, line)
 		Stat.ErrorIncr()
 		return nil
 	}
@@ -268,8 +268,8 @@ func parseLine(line []byte) *Packet {
 		Value:       value,
 		SrcBucket:   string(name),
 		CleanBucket: cleanBucket,
-		Modifier: typeCode,
-		Sampling: sampling,
+		Modifier:    typeCode,
+		Sampling:    sampling,
 	}
 }
 

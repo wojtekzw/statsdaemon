@@ -84,7 +84,7 @@ func packetHandler(s *Packet) {
 func formatMetricOutput(bucket string, value interface{}, now int64, backend string) string {
 	var ret, val string
 	logCtx := log.WithFields(log.Fields{
-		"in":  "formatMetricOutput",
+		"in": "formatMetricOutput",
 	})
 	val = ""
 	switch value.(type) {
@@ -135,7 +135,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		startCounter, nowCounter MeasurePoint
 	)
 	logCtx := log.WithFields(log.Fields{
-		"in":  "processCounters",
+		"in": "processCounters",
 	})
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
@@ -272,7 +272,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 	var num int64
 
 	logCtx := log.WithFields(log.Fields{
-		"in":  "processTimers",
+		"in": "processTimers",
 	})
 	for bucket, timer := range timers {
 		bucketWithoutPostfix := bucket

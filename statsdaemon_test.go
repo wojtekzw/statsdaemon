@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	log "github.com/Sirupsen/logrus"
+	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
 	"github.com/bmizerany/assert"
 	"github.com/boltdb/bolt"
 	flag "github.com/ogier/pflag"
-	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
-	"fmt"
 	"log/syslog"
 )
 
@@ -870,7 +870,6 @@ func BenchmarkParseLineRate(b *testing.B) {
 	}
 }
 
-
 func BenchmarkParseLineWith3Tags(b *testing.B) {
 	d := []byte("a.key.with-0.dash.^host=dev.^env=prod.^product=sth:4|c|@0.5")
 	for i := 0; i < b.N; i++ {
@@ -891,7 +890,7 @@ func BenchmarkParseLineWith1TagError(b *testing.B) {
 }
 
 func BenchmarkParseLineWith1TagErrorAndSyslog(b *testing.B) {
-	hook, err := logrus_syslog.NewSyslogHook("", "", syslog.LOG_DEBUG | syslog.LOG_LOCAL3, "statsdaemon_test")
+	hook, err := logrus_syslog.NewSyslogHook("", "", syslog.LOG_DEBUG|syslog.LOG_LOCAL3, "statsdaemon_test")
 	if err != nil {
 		fmt.Printf("Unable to connect to syslog daemon: %s\n", err)
 	} else {
@@ -905,4 +904,3 @@ func BenchmarkParseLineWith1TagErrorAndSyslog(b *testing.B) {
 		parseLine(d)
 	}
 }
-

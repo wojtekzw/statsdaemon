@@ -21,7 +21,7 @@ func StructPrettyPrint(s interface{}) string {
 
 func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 	logCtx := log.WithFields(log.Fields{
-		"in":  "openTSDB",
+		"in": "openTSDB",
 	})
 
 	maxMetrics := 10
@@ -132,9 +132,6 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 			}
 
 		}
-
-
-
 
 		logCtx.Infof("sent %d stats to %s", currentMetricsNum, config.OpenTSDBAddress)
 
