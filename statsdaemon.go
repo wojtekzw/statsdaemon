@@ -24,7 +24,7 @@ import (
 
 // Network constants & dbName
 const (
-	maxUnprocessedPackets = 10000
+	maxUnprocessedPackets = 20000
 
 	tcpReadSize     = 4096
 	maxUDPPacket    = 1432
@@ -275,7 +275,7 @@ func main() {
 		}
 	}
 
-	log.SetFormatter(&log.TextFormatter{DisableColors: true})
+	//log.SetFormatter(&log.TextFormatter{DisableColors: true})
 
 	if Config.LogName == "" {
 		log.SetOutput(ioutil.Discard)
