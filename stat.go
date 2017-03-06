@@ -2,13 +2,11 @@ package main
 
 import (
 	"fmt"
-	"os"
 	log "github.com/Sirupsen/logrus"
 	"github.com/shirou/gopsutil/process"
+	"os"
 	"sync"
-
 )
-
 
 type internalDaemonStat struct {
 	PointsReceived      int64
@@ -34,7 +32,7 @@ type DaemonStat struct {
 	Interval  int64
 }
 
-func(ds *DaemonStat) Init() {
+func (ds *DaemonStat) Init() {
 	ds.Process, _ = process.NewProcess(int32(os.Getpid()))
 	// start counting CPU usage
 	ds.CPUPercent()
@@ -45,7 +43,7 @@ func (ds *DaemonStat) CPUPercent() {
 	ds.RWMutex.Lock()
 	ds.curStat.CPUPercent = cpuPerc
 	ds.RWMutex.Unlock()
-	log.Errorf("CPUPercent: %.1f%%",ds.curStat.CPUPercent)
+	log.Errorf("CPUPercent: %.1f%%", ds.curStat.CPUPercent)
 
 }
 func (ds *DaemonStat) GlobalVarsSizeToString() string {
@@ -71,7 +69,7 @@ func (ds *DaemonStat) String() string {
 		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS)/(1024*1024))
 		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap)/(1024*1024))
 	}
-	s = s + fmt.Sprintf("CPUPercent: %.1f%%, ",ds.savedStat.CPUPercent)
+	s = s + fmt.Sprintf("CPUPercent: %.1f%%, ", ds.savedStat.CPUPercent)
 	s = s + fmt.Sprintf("QueueLen: %d, ", ds.savedStat.QueueLen)
 	s = s + ds.GlobalVarsSizeToString()
 	return s
@@ -144,7 +142,6 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 		return fmt.Errorf("Empty metric name prefix. No saving to backend")
 	}
 
-	
 	// Counters
 	pointsReceived := makeBucketName(globalPrefix, metricNamePrefix, "point.received", extraTagsStr)
 	_, ok = countersMap[pointsReceived]
@@ -195,22 +192,19 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	}
 	countersMap[batchesTransmitFail] += ds.savedStat.BatchesTransmitFail
 
-
 	pointsTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "point.transmitted", extraTagsStr)
 	_, ok = countersMap[pointsTransmitted]
 	if !ok {
 		countersMap[pointsTransmitted] = 0
 	}
 	countersMap[pointsTransmitted] += ds.savedStat.PointsTransmitted
-	
-	
+
 	otherErrors := makeBucketName(globalPrefix, metricNamePrefix, "error.other", extraTagsStr)
 	_, ok = countersMap[otherErrors]
 	if !ok {
 		countersMap[otherErrors] = 0
 	}
 	countersMap[otherErrors] += ds.savedStat.OtherErrors
-
 
 	// Gauges
 	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.received.rate", extraTagsStr)
@@ -221,8 +215,6 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 
 	cpuPercent := makeBucketName(globalPrefix, metricNamePrefix, "cpu.percent", extraTagsStr)
 	gaugesMap[cpuPercent] = float64(ds.savedStat.CPUPercent)
-
-
 
 	if ds.savedStat.MemGauge != nil {
 		memRSS := makeBucketName(globalPrefix, metricNamePrefix, "memory.rss", extraTagsStr)
@@ -246,7 +238,6 @@ func (ds *DaemonStat) ProcessStats() {
 
 	ds.RWMutex.Lock()
 	defer ds.RWMutex.Unlock()
-
 
 	ds.curStat.MemGauge = memInfo
 	ds.curStat.CPUPercent = cpuPercent
