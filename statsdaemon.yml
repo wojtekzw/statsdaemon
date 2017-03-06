@@ -2,7 +2,7 @@
 udp-addr: :8125
 tcp-addr: ""
 max-udp-packet-size: 1472
-backend-type: dummy
+backend-type: external
 post-flush-cmd: stdout
 graphite: 127.0.0.1:2003
 opentsdb: 127.0.0.1:4242
@@ -24,8 +24,8 @@ percent-threshold:
 - value: 95
   name: "95"
 extra-tags: ""
-log-name: ""
-log-to-syslog: true
+log-name: "/tmp/statsdaemon.log"
+log-to-syslog: false
 # log to unix socket
 syslog-udp-address: ""
 #syslog-udp-address: localhost:514
