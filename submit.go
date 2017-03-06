@@ -32,6 +32,8 @@ func submit(deadline time.Time, backend string) error {
 	num += processSets(&buffer, now, backend)
 	num += processKeyValue(&buffer, now, backend)
 
+	Stat.PointsTransmittedInc(num)
+
 	if Config.InternalLogLevel >= log.DebugLevel {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
 			if len(line) == 0 {
@@ -48,12 +50,16 @@ func submit(deadline time.Time, backend string) error {
 			err := sendDataExtCmd(Config.PostFlushCmd, &buffer)
 			if err != nil {
 				logCtx.Errorf("%s", err)
-				Stat.ErrorIncr()
+				Stat.BatchesTransmitFailInc()
+			} else {
+				Stat.BatchesTransmittedInc()
 			}
 		} else {
 			if err := sendDataStdout(&buffer); err != nil {
 				logCtx.Errorf("%s", err)
-				Stat.ErrorIncr()
+				Stat.BatchesTransmitFailInc()
+			} else {
+				Stat.BatchesTransmittedInc()
 			}
 		}
 
@@ -61,14 +67,18 @@ func submit(deadline time.Time, backend string) error {
 		err := graphite(Config, deadline, &buffer)
 		if err != nil {
 			logCtx.Errorf("%s", err)
-			Stat.ErrorIncr()
+			Stat.BatchesTransmitFailInc()
+		} else {
+			Stat.BatchesTransmittedInc()
 		}
 
 	case "opentsdb":
 		err := openTSDB(Config, &buffer)
 		if err != nil {
 			logCtx.Errorf("%s", err)
-			Stat.ErrorIncr()
+			Stat.BatchesTransmitFailInc()
+		} else {
+			Stat.BatchesTransmittedInc()
 		}
 
 	case "dummy":

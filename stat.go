@@ -9,13 +9,21 @@ import (
 
 )
 
+
 type internalDaemonStat struct {
-	PointsCounter int64
-	PointsRate    float64
-	ErrorsCounter int64
-	MemGauge      *process.MemoryInfoStat
-	QueueLen      int64
-	CPUPercent    float64
+	PointsReceived      int64
+	PointsReceivedRate  float64
+	PointsParseFail     int64
+	PointsSoftParseFail int64
+	BytesReceived       int64
+	ReadFail            int64
+	BatchesTransmitted  int64
+	BatchesTransmitFail int64
+	PointsTransmitted   int64
+	OtherErrors         int64
+	MemGauge            *process.MemoryInfoStat
+	QueueLen            int64
+	CPUPercent          float64
 }
 
 type DaemonStat struct {
@@ -47,9 +55,16 @@ func (ds *DaemonStat) GlobalVarsSizeToString() string {
 }
 
 func (ds *DaemonStat) String() string {
-	s := fmt.Sprintf("PointsCounter: %d ops, ", ds.savedStat.PointsCounter)
-	s = s + fmt.Sprintf("PointsRate: %.2f ops/s, ", ds.savedStat.PointsRate)
-	s = s + fmt.Sprintf("ErrorsCounter: %d errors, ", ds.savedStat.ErrorsCounter)
+	s := fmt.Sprintf("PointsReceived: %d ops, ", ds.savedStat.PointsReceived)
+	s = s + fmt.Sprintf("PointsReceivedRate: %.2f ops/s, ", ds.savedStat.PointsReceivedRate)
+	s = s + fmt.Sprintf("PointsParseFail: %d ops, ", ds.savedStat.PointsParseFail)
+	s = s + fmt.Sprintf("PointsSoftParseFail: %d ops, ", ds.savedStat.PointsSoftParseFail)
+	s = s + fmt.Sprintf("BytesReceived: %d bytes, ", ds.savedStat.BytesReceived)
+	s = s + fmt.Sprintf("ReadFail: %d ops, ", ds.savedStat.ReadFail)
+	s = s + fmt.Sprintf("BatchesTransmitted: %d ops, ", ds.savedStat.BatchesTransmitted)
+	s = s + fmt.Sprintf("BatchesTransmitFail: %d ops, ", ds.savedStat.BatchesTransmitFail)
+	s = s + fmt.Sprintf("PointsTransmitted: %d ops, ", ds.savedStat.PointsTransmitted)
+	s = s + fmt.Sprintf("OtherErrors: %d errors, ", ds.savedStat.OtherErrors)
 
 	if ds.savedStat.MemGauge != nil {
 		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS)/(1024*1024))
@@ -66,22 +81,59 @@ func (ds *DaemonStat) Print() {
 	fmt.Printf("%s", ds.String())
 }
 
-func (ds *DaemonStat) PointIncr() {
+func (ds *DaemonStat) PointsReceivedInc() {
 	ds.RWMutex.Lock()
 	defer ds.RWMutex.Unlock()
-	ds.curStat.PointsCounter++
-	if ds.curStat.PointsCounter < 0 {
-		ds.curStat.PointsCounter = 0
-	}
+	ds.curStat.PointsReceived++
 }
 
-func (ds *DaemonStat) ErrorIncr() {
+func (ds *DaemonStat) OtherErrorsInc() {
 	ds.RWMutex.Lock()
 	defer ds.RWMutex.Unlock()
-	ds.curStat.ErrorsCounter++
-	if ds.curStat.ErrorsCounter < 0 {
-		ds.curStat.ErrorsCounter = 0
-	}
+	ds.curStat.OtherErrors++
+
+}
+
+func (ds *DaemonStat) BytesReceivedInc(n int64) {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.BytesReceived += n
+}
+
+func (ds *DaemonStat) ReadFailInc() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.ReadFail++
+}
+
+func (ds *DaemonStat) PointsParseFailInc() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.PointsParseFail++
+}
+
+func (ds *DaemonStat) PointsParseSoftFailInc() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.PointsSoftParseFail++
+}
+
+func (ds *DaemonStat) BatchesTransmittedInc() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.BatchesTransmitted++
+}
+
+func (ds *DaemonStat) BatchesTransmitFailInc() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.BatchesTransmitFail++
+}
+
+func (ds *DaemonStat) PointsTransmittedInc(n int64) {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.PointsTransmitted += n
 }
 
 func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
@@ -92,28 +144,77 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 		return fmt.Errorf("Empty metric name prefix. No saving to backend")
 	}
 
+	
 	// Counters
-	pointsCounter := makeBucketName(globalPrefix, metricNamePrefix, "point.count", extraTagsStr)
-	_, ok = countersMap[pointsCounter]
+	pointsReceived := makeBucketName(globalPrefix, metricNamePrefix, "point.received", extraTagsStr)
+	_, ok = countersMap[pointsReceived]
 	if !ok {
-		countersMap[pointsCounter] = 0
+		countersMap[pointsReceived] = 0
 	}
-	countersMap[pointsCounter] += ds.savedStat.PointsCounter
+	countersMap[pointsReceived] += ds.savedStat.PointsReceived
 
-	//countersMap[pointsCounter] = ds.savedStat.PointsCounter
-
-	errorsCounter := makeBucketName(globalPrefix, metricNamePrefix, "error.count", extraTagsStr)
-	_, ok = countersMap[errorsCounter]
+	pointsParseFail := makeBucketName(globalPrefix, metricNamePrefix, "point.parsefail", extraTagsStr)
+	_, ok = countersMap[pointsParseFail]
 	if !ok {
-		countersMap[errorsCounter] = 0
+		countersMap[pointsParseFail] = 0
 	}
-	countersMap[errorsCounter] += ds.savedStat.ErrorsCounter
+	countersMap[pointsParseFail] += ds.savedStat.PointsParseFail
 
-	//countersMap[errorsCounter] = ds.savedStat.ErrorsCounter
+	pointsSoftParseFail := makeBucketName(globalPrefix, metricNamePrefix, "point.softparsefail", extraTagsStr)
+	_, ok = countersMap[pointsSoftParseFail]
+	if !ok {
+		countersMap[pointsSoftParseFail] = 0
+	}
+	countersMap[pointsSoftParseFail] += ds.savedStat.PointsSoftParseFail
+
+	bytesReceived := makeBucketName(globalPrefix, metricNamePrefix, "read.bytes", extraTagsStr)
+	_, ok = countersMap[bytesReceived]
+	if !ok {
+		countersMap[bytesReceived] = 0
+	}
+	countersMap[bytesReceived] += ds.savedStat.BytesReceived
+
+	readFail := makeBucketName(globalPrefix, metricNamePrefix, "read.fail", extraTagsStr)
+	_, ok = countersMap[readFail]
+	if !ok {
+		countersMap[readFail] = 0
+	}
+	countersMap[readFail] += ds.savedStat.ReadFail
+
+	batchesTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "batch.transmitted", extraTagsStr)
+	_, ok = countersMap[batchesTransmitted]
+	if !ok {
+		countersMap[batchesTransmitted] = 0
+	}
+	countersMap[batchesTransmitted] += ds.savedStat.BatchesTransmitted
+
+	batchesTransmitFail := makeBucketName(globalPrefix, metricNamePrefix, "batch.transmitfail", extraTagsStr)
+	_, ok = countersMap[batchesTransmitFail]
+	if !ok {
+		countersMap[batchesTransmitFail] = 0
+	}
+	countersMap[batchesTransmitFail] += ds.savedStat.BatchesTransmitFail
+
+
+	pointsTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "point.transmitted", extraTagsStr)
+	_, ok = countersMap[pointsTransmitted]
+	if !ok {
+		countersMap[pointsTransmitted] = 0
+	}
+	countersMap[pointsTransmitted] += ds.savedStat.PointsTransmitted
+	
+	
+	otherErrors := makeBucketName(globalPrefix, metricNamePrefix, "error.other", extraTagsStr)
+	_, ok = countersMap[otherErrors]
+	if !ok {
+		countersMap[otherErrors] = 0
+	}
+	countersMap[otherErrors] += ds.savedStat.OtherErrors
+
 
 	// Gauges
-	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.rate", extraTagsStr)
-	gaugesMap[pointsRate] = ds.savedStat.PointsRate
+	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.received.rate", extraTagsStr)
+	gaugesMap[pointsRate] = ds.savedStat.PointsReceivedRate
 
 	queueLen := makeBucketName(globalPrefix, metricNamePrefix, "queue.len", extraTagsStr)
 	gaugesMap[queueLen] = float64(ds.savedStat.QueueLen)
@@ -150,7 +251,7 @@ func (ds *DaemonStat) ProcessStats() {
 	ds.curStat.MemGauge = memInfo
 	ds.curStat.CPUPercent = cpuPercent
 
-	ds.curStat.PointsRate = float64(ds.curStat.PointsCounter) / float64(ds.Interval)
+	ds.curStat.PointsReceivedRate = float64(ds.curStat.PointsReceived) / float64(ds.Interval)
 
 	// FIXME using GLOBAL channel In
 	ds.curStat.QueueLen = int64(len(In))

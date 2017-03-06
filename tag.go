@@ -57,7 +57,7 @@ func tagsDelims(tf uint) (string, string, string) {
 
 	if tf != tfCaret && tf != tfGraphite && tf != tfURI && tf != tfPretty {
 		logCtx.WithField("after", "check delim type").Errorf("Unknown tag format %d. Setting to default = %d", tf, tfDefault)
-		Stat.ErrorIncr()
+		Stat.OtherErrorsInc()
 		tf = tfDefault
 	}
 	switch tf {
@@ -190,19 +190,19 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
 	}
 
+	//FIXME - what is this ? (why  "=^")
 	if strings.IndexAny(tagsSlice[0], "=^") > -1 {
-		logCtx.Errorf("Format error: Invalid tag format in \"%s\"", name)
-		Stat.ErrorIncr()
 		oldBucket := tagsSlice[0]
 		tagsSlice[0] = sanitizeBucket(tagsSlice[0])
-		logCtx.Errorf("Format error: Converting bucket name from  \"%s\" to \"%s\"", oldBucket, tagsSlice[0])
+		logCtx.Errorf("Format error: Converting bucket name from  \"%s\" (in %s) to \"%s\"", oldBucket, name, tagsSlice[0])
+		Stat.PointsParseSoftFailInc()
 	}
 
 	for _, e := range tagsSlice[1:] {
 		tagAndVal := strings.Split(e, "=")
 		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			logCtx.Errorf("Invalid tag format [%s] %v ", name, tagsSlice[1:])
-			Stat.ErrorIncr()
+			logCtx.Errorf("Format error: Invalid tag format [%s] %v, Removing tag", name, tagsSlice[1:])
+			Stat.PointsParseSoftFailInc()
 		} else {
 			tags[tagAndVal[0]] = tagAndVal[1]
 		}

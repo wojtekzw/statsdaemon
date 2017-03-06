@@ -66,7 +66,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				if err != nil {
 					// continue on error in one metric
 					logCtx.Errorf("Only float/integer values allowed. Got: %s in line \"%s\". Error: %s", data[1], data, err)
-					Stat.ErrorIncr()
+					Stat.OtherErrorsInc()
 					continue
 				}
 				value.Set(val)
@@ -75,7 +75,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				err = timestamp.Parse(data[2])
 				if err != nil {
 					logCtx.Errorf("Timestamp expected. Got: %s in line \"%s\". Error: %s", data[2], data, err)
-					Stat.ErrorIncr()
+					Stat.OtherErrorsInc()
 					continue
 				}
 
@@ -84,7 +84,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				err = metric.Set(metricName)
 				if err != nil {
 					logCtx.Errorf("Metric name expected. Got: %s in line \"%s\". Error: %s", data[0], data, err)
-					Stat.ErrorIncr()
+					Stat.OtherErrorsInc()
 					continue
 				}
 
@@ -96,7 +96,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 							if len(strSlice) == 2 {
 								if strSlice[0] == "" || strSlice[1] == "" {
 									logCtx.Errorf("Tag  expected. Got: %s in line \"%s\"", e, data)
-									Stat.ErrorIncr()
+									Stat.OtherErrorsInc()
 									continue
 								}
 								tags.Set(strSlice[0], strSlice[1])
@@ -128,7 +128,7 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 				}
 			} else {
 				logCtx.Errorf("Buffer format. Expected \"metric value timestamp\". Got \"%s\"", mtr)
-				Stat.ErrorIncr()
+				Stat.OtherErrorsInc()
 			}
 
 		}

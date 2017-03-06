@@ -97,11 +97,12 @@ func (mp *MsgParser) Next() (*Packet, bool) {
 		}
 
 		n, err := mp.reader.Read(buf[idx:])
+		Stat.BytesReceivedInc(int64(n))
 		buf = buf[:idx+n]
 		if err != nil {
 			if err != io.EOF {
 				logCtx.Errorf("%s", err)
-				Stat.ErrorIncr()
+				Stat.ReadFailInc()
 			}
 
 			mp.done = true
@@ -153,7 +154,7 @@ func parseLine(line []byte) *Packet {
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
 		logCtx.Errorf("Failed to parse line: %s", string(line))
-		Stat.ErrorIncr()
+		Stat.PointsParseFailInc()
 		return nil
 	}
 
@@ -166,7 +167,7 @@ func parseLine(line []byte) *Packet {
 			f64, err := strconv.ParseFloat(string(split[2][1:]), 32)
 			if err != nil {
 				logCtx.Errorf("Failed to ParseFloat %s (%s) in line '%s'", string(split[2][1:]), err, line)
-				Stat.ErrorIncr()
+				Stat.PointsParseFailInc()
 				return nil
 			}
 			sampling = float32(f64)
@@ -176,7 +177,7 @@ func parseLine(line []byte) *Packet {
 	split = bytes.SplitN(keyval, []byte{':'}, 2)
 	if len(split) < 2 {
 		logCtx.Errorf("Failed to parse line: '%s'", line)
-		Stat.ErrorIncr()
+		Stat.PointsParseFailInc()
 		return nil
 	}
 	// raw bucket name from line
@@ -184,7 +185,7 @@ func parseLine(line []byte) *Packet {
 	val := split[1]
 	if len(val) == 0 {
 		logCtx.Errorf("Failed to parse line: '%s'", line)
-		Stat.ErrorIncr()
+		Stat.PointsParseFailInc()
 		return nil
 	}
 
@@ -200,7 +201,7 @@ func parseLine(line []byte) *Packet {
 		value, err = strconv.ParseInt(string(val), 10, 64)
 		if err != nil {
 			logCtx.Errorf("Failed to ParseInt %s - %s, raw bucket: %s, line: `%s`", string(val), err, name, line)
-			Stat.ErrorIncr()
+			Stat.PointsParseFailInc()
 			return nil
 		}
 	case "g":
@@ -225,7 +226,7 @@ func parseLine(line []byte) *Packet {
 		value, err = strconv.ParseFloat(s, 64)
 		if err != nil {
 			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
-			Stat.ErrorIncr()
+			Stat.PointsParseFailInc()
 			return nil
 		}
 
@@ -236,14 +237,14 @@ func parseLine(line []byte) *Packet {
 		value, err = strconv.ParseFloat(string(val), 64)
 		if err != nil {
 			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
-			Stat.ErrorIncr()
+			Stat.PointsParseFailInc()
 			return nil
 		}
 	case "kv":
 		value = string(val) // Key/value should not need transformation
 	default:
 		logCtx.Errorf("Unrecognized type code %q, raw bucket: %s, line: '%s'", typeCode, name, line)
-		Stat.ErrorIncr()
+		Stat.PointsParseFailInc()
 		return nil
 	}
 
@@ -252,7 +253,7 @@ func parseLine(line []byte) *Packet {
 	cleanBucket, tagsFromBucketName, err = parseBucketAndTags(string(name))
 	if err != nil {
 		logCtx.Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
-		Stat.ErrorIncr()
+		Stat.PointsParseFailInc()
 		return nil
 	}
 

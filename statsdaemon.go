@@ -399,13 +399,13 @@ func monitor() {
 			logCtx.Infof("Caught signal \"%v\"... shutting down", sig)
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
 				logCtx.Errorf("%s", err)
-				Stat.ErrorIncr()
+				Stat.OtherErrorsInc()
 			}
 			return
 		case <-ticker.C:
 			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
 				logCtx.Errorf("%s", err)
-				Stat.ErrorIncr()
+				Stat.OtherErrorsInc()
 			}
 		case s := <-In:
 			packetHandler(s)

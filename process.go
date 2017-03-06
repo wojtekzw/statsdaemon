@@ -15,7 +15,7 @@ import (
 // global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
 	// New stat variable
-	Stat.PointIncr()
+	Stat.PointsReceivedInc()
 
 	// global var tags
 	// tags[s.Bucket] = s.Tags
@@ -96,13 +96,13 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 		val = fmt.Sprintf("%f", value)
 	default:
 		logCtx.Errorf("Invalid type: %v", reflect.TypeOf(value))
-		Stat.ErrorIncr()
+		Stat.OtherErrorsInc()
 	}
 
 	cleanBucket, localTags, err := parseBucketAndTags(bucket)
 	if err != nil {
 		logCtx.Errorf("parseBucketAndTags error: %s", err)
-		Stat.ErrorIncr()
+		Stat.PointsParseFailInc()
 	}
 
 	setFirstGraphite := ""
@@ -144,7 +144,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 			if err != nil {
 				logCtx.Errorf("readMeasurePoint: %s", err)
-				Stat.ErrorIncr()
+				Stat.OtherErrorsInc()
 			}
 		} else {
 			startCounter.Value = 0
@@ -164,7 +164,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 			err = storeMeasurePoint(dbHandle, bucketName, bucket, nowCounter)
 			if err != nil {
 				logCtx.Errorf("storeMeasurePoint: %s", err)
-				Stat.ErrorIncr()
+				Stat.OtherErrorsInc()
 			}
 		}
 		num++
@@ -178,7 +178,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 				startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
 				if err != nil {
 					logCtx.Errorf("readMeasurePoint: %s", err)
-					Stat.ErrorIncr()
+					Stat.OtherErrorsInc()
 				}
 			} else {
 				startCounter.Value = 0
@@ -294,7 +294,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		cleanBucket, localTags, err := parseBucketAndTags(bucketWithoutPostfix)
 		if err != nil {
 			logCtx.Errorf("parseBucketAndTags: %s", err)
-			Stat.ErrorIncr()
+			Stat.PointsParseFailInc()
 		}
 		fullNormalizedTags := normalizeTags(addTags(localTags, Config.ExtraTagsHash), tfDefault)
 
