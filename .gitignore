@@ -3,3 +3,5 @@ dist
 .idea
 statsdaemon.iml
 tools/
+ansible/
+builds/
