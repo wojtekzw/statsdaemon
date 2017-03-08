@@ -3,10 +3,8 @@ package main
 import (
 	"bytes"
 	"math"
-	"math/rand"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -181,7 +179,134 @@ func TestParseLineCount(t *testing.T) {
 	assert.Equal(t, int64(-4), packet.Value.(int64))
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
+
+	// check packet cache
+	d = []byte("gorets:1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("gorets:1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+
+	// check packet cache
+	d = []byte("gorets:-1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(-1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("gorets:-1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(-1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+
 }
+
+func TestPacketCacheInParseLineCount(t *testing.T) {
+	d := []byte("gorets:1|c|@0.1")
+	packet := parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(0.1), packet.Sampling)
+
+
+	d = []byte("gorets:1|c|@0.1")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(0.1), packet.Sampling)
+
+
+	d = []byte("gorets:1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("gorets:1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("gorets:-1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(-1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("gorets:-1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "gorets", packet.Bucket)
+	assert.Equal(t, int64(-1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+
+
+	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "a.key.with-0.dash.^1key=val1.^7key=val7.^9key=val9", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+
+	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "a.key.with-0.dash.^1key=val1.^7key=val7.^9key=val9", packet.Bucket)
+	assert.Equal(t, int64(1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:-1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "a.key.with-0.dash.^1key=val1.^7key=val7.^9key=val9", packet.Bucket)
+	assert.Equal(t, int64(-1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:-1|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "a.key.with-0.dash.^1key=val1.^7key=val7.^9key=val9", packet.Bucket)
+	assert.Equal(t, int64(-1), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+
+}
+
 
 func TestParseLineTimer(t *testing.T) {
 	d := []byte("glork:320|ms")
@@ -365,6 +490,68 @@ func TestParseLineMisc(t *testing.T) {
 	if packet != nil {
 		t.Fail()
 	}
+}
+
+func TestParseLineTags(t *testing.T) {
+	d := []byte("a.key.with-0.dash.^key=val1.^key=val2:4|c")
+	packet := parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "a.key.with-0.dash.^key=val2", packet.Bucket)
+	assert.Equal(t, int64(4), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:4|c")
+	packet = parseLine(d)
+	assert.NotEqual(t, packet, nil)
+	assert.Equal(t, "a.key.with-0.dash.^1key=val1.^7key=val7.^9key=val9", packet.Bucket)
+	assert.Equal(t, int64(4), packet.Value.(int64))
+	assert.Equal(t, "c", packet.Modifier)
+	assert.Equal(t, float32(1), packet.Sampling)
+
+
+	d = []byte("a.key.with-0.dash.^key2=val2...^key1=val1:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
+	d = []byte("a.key.with-0.dash.^key2=val2.^key1=val1..:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
+	d = []byte("a.key.with-0.dash.:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
+	d = []byte("a.key.with-0.dash..:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
+	d = []byte("a.key.with-0.dash.^key=:val:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
+	d = []byte("a.key.with-0.dash.^key=:val.^key2=val2:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
+	d = []byte("a.key.with-0.dash.^key=:10.^key2=val2:4|c")
+	packet = parseLine(d)
+	if packet != nil {
+		t.Fail()
+	}
+
 }
 
 func TestMultiLine(t *testing.T) {
@@ -732,158 +919,189 @@ func TestMultipleUDPSends(t *testing.T) {
 	wg.Wait()
 }
 
-func BenchmarkManyDifferentSensors(t *testing.B) {
-	r := rand.New(rand.NewSource(438))
-	for i := 0; i < 1000; i++ {
-		bucket := "response_time" + strconv.Itoa(i)
-		for i := 0; i < 10000; i++ {
-			a := float64(r.Uint32() % 1000)
-			timers[bucket] = append(timers[bucket], a)
-		}
-	}
+//func BenchmarkManyDifferentSensors(t *testing.B) {
+//	r := rand.New(rand.NewSource(438))
+//	for i := 0; i < 1000; i++ {
+//		bucket := "response_time" + strconv.Itoa(i)
+//		for i := 0; i < 10000; i++ {
+//			a := float64(r.Uint32() % 1000)
+//			timers[bucket] = append(timers[bucket], a)
+//		}
+//	}
+//
+//	for i := 0; i < 1000; i++ {
+//		bucket := "count" + strconv.Itoa(i)
+//		for i := 0; i < 10000; i++ {
+//			a := int64(r.Uint32() % 1000)
+//			counters[bucket] = a
+//		}
+//	}
+//
+//	for i := 0; i < 1000; i++ {
+//		bucket := "gauge" + strconv.Itoa(i)
+//		for i := 0; i < 10000; i++ {
+//			a := float64(r.Uint32() % 1000)
+//			gauges[bucket] = a
+//		}
+//	}
+//
+//	var (
+//		buff bytes.Buffer
+//		err  error
+//	)
+//
+//	Config.StoreDb = "/tmp/stats_test.db"
+//	removeFile(Config.StoreDb)
+//
+//	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+//	if err != nil {
+//		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
+//	}
+//	// dbHandle.NoSync = true
+//
+//	defer closeAndRemove(dbHandle, Config.StoreDb)
+//
+//	now := time.Now().Unix()
+//	t.ResetTimer()
+//	processTimers(&buff, now, commonPercentiles, "external")
+//	processCounters(&buff, now, true, "external", dbHandle)
+//	processGauges(&buff, now, "external")
+//}
+//
+//func BenchmarkOneBigTimer(t *testing.B) {
+//	r := rand.New(rand.NewSource(438))
+//	bucket := "response_time"
+//	for i := 0; i < 10000000; i++ {
+//		a := float64(r.Uint32() % 1000)
+//		timers[bucket] = append(timers[bucket], a)
+//	}
+//
+//	var buff bytes.Buffer
+//	t.ResetTimer()
+//	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
+//}
+//
+//func BenchmarkLotsOfTimers(t *testing.B) {
+//	r := rand.New(rand.NewSource(438))
+//	for i := 0; i < 1000; i++ {
+//		bucket := "response_time" + strconv.Itoa(i)
+//		for i := 0; i < 10000; i++ {
+//			a := float64(r.Uint32() % 1000)
+//			timers[bucket] = append(timers[bucket], a)
+//		}
+//	}
+//
+//	var buff bytes.Buffer
+//	t.ResetTimer()
+//	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
+//}
+//
+//func BenchmarkOneTimerWith10Points(t *testing.B) {
+//	r := rand.New(rand.NewSource(438))
+//	bucket := "response_time"
+//	for i := 0; i < 10; i++ {
+//		a := float64(r.Uint32() % 1000)
+//		timers[bucket] = append(timers[bucket], a)
+//	}
+//
+//	var buff bytes.Buffer
+//	t.ResetTimer()
+//
+//	for i := 0; i < t.N; i++ {
+//		processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
+//		buff = bytes.Buffer{}
+//	}
+//
+//}
+//
+//func Benchmark100CountersWith1000IncrementsEach(t *testing.B) {
+//	r := rand.New(rand.NewSource(438))
+//
+//	for i := 0; i < 100; i++ {
+//		bucket := "count" + strconv.Itoa(i)
+//		for i := 0; i < 1000; i++ {
+//			a := int64(r.Uint32() % 1000)
+//			counters[bucket] = a
+//		}
+//	}
+//
+//	var (
+//		buff bytes.Buffer
+//		err  error
+//	)
+//
+//	Config.StoreDb = "/tmp/stats_test.db"
+//	removeFile(Config.StoreDb)
+//
+//	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+//	if err != nil {
+//		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
+//	}
+//	// dbHandle.NoSync = true
+//
+//	defer closeAndRemove(dbHandle, Config.StoreDb)
+//
+//	t.ResetTimer()
+//
+//	for i := 0; i < t.N; i++ {
+//		processCounters(&buff, time.Now().Unix(), true, "external", dbHandle)
+//		buff = bytes.Buffer{}
+//	}
+//
+//}
 
-	for i := 0; i < 1000; i++ {
-		bucket := "count" + strconv.Itoa(i)
-		for i := 0; i < 10000; i++ {
-			a := int64(r.Uint32() % 1000)
-			counters[bucket] = a
-		}
-	}
 
-	for i := 0; i < 1000; i++ {
-		bucket := "gauge" + strconv.Itoa(i)
-		for i := 0; i < 10000; i++ {
-			a := float64(r.Uint32() % 1000)
-			gauges[bucket] = a
-		}
-	}
-
-	var (
-		buff bytes.Buffer
-		err  error
-	)
-
-	Config.StoreDb = "/tmp/stats_test.db"
-	removeFile(Config.StoreDb)
-
-	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
-	if err != nil {
-		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
-	}
-	// dbHandle.NoSync = true
-
-	defer closeAndRemove(dbHandle, Config.StoreDb)
-
-	now := time.Now().Unix()
-	t.ResetTimer()
-	processTimers(&buff, now, commonPercentiles, "external")
-	processCounters(&buff, now, true, "external", dbHandle)
-	processGauges(&buff, now, "external")
-}
-
-func BenchmarkOneBigTimer(t *testing.B) {
-	r := rand.New(rand.NewSource(438))
-	bucket := "response_time"
-	for i := 0; i < 10000000; i++ {
-		a := float64(r.Uint32() % 1000)
-		timers[bucket] = append(timers[bucket], a)
-	}
-
-	var buff bytes.Buffer
-	t.ResetTimer()
-	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
-}
-
-func BenchmarkLotsOfTimers(t *testing.B) {
-	r := rand.New(rand.NewSource(438))
-	for i := 0; i < 1000; i++ {
-		bucket := "response_time" + strconv.Itoa(i)
-		for i := 0; i < 10000; i++ {
-			a := float64(r.Uint32() % 1000)
-			timers[bucket] = append(timers[bucket], a)
-		}
-	}
-
-	var buff bytes.Buffer
-	t.ResetTimer()
-	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
-}
-
-func BenchmarkOneTimerWith10Points(t *testing.B) {
-	r := rand.New(rand.NewSource(438))
-	bucket := "response_time"
-	for i := 0; i < 10; i++ {
-		a := float64(r.Uint32() % 1000)
-		timers[bucket] = append(timers[bucket], a)
-	}
-
-	var buff bytes.Buffer
-	t.ResetTimer()
-
-	for i := 0; i < t.N; i++ {
-		processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
-		buff = bytes.Buffer{}
-	}
-
-}
-
-func Benchmark100CountersWith1000IncrementsEach(t *testing.B) {
-	r := rand.New(rand.NewSource(438))
-
-	for i := 0; i < 100; i++ {
-		bucket := "count" + strconv.Itoa(i)
-		for i := 0; i < 1000; i++ {
-			a := int64(r.Uint32() % 1000)
-			counters[bucket] = a
-		}
-	}
-
-	var (
-		buff bytes.Buffer
-		err  error
-	)
-
-	Config.StoreDb = "/tmp/stats_test.db"
-	removeFile(Config.StoreDb)
-
-	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
-	if err != nil {
-		log.Fatalf("Error opening %s (%s)\n", Config.StoreDb, err)
-	}
-	// dbHandle.NoSync = true
-
-	defer closeAndRemove(dbHandle, Config.StoreDb)
-
-	t.ResetTimer()
-
-	for i := 0; i < t.N; i++ {
-		processCounters(&buff, time.Now().Unix(), true, "external", dbHandle)
-		buff = bytes.Buffer{}
-	}
-
-}
-
-func BenchmarkParseLineRate(b *testing.B) {
-	d := []byte("a.key.with-0.dash:4|c|@0.5")
+func BenchmarkParseLineRateCache(b *testing.B) {
+	usePacketCache = true
+	d := []byte("a.key.with-0.dash:1|c|@0.5")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}
 }
 
-func BenchmarkParseLineWith3Tags(b *testing.B) {
-	d := []byte("a.key.with-0.dash.^host=dev.^env=prod.^product=sth:4|c|@0.5")
+func BenchmarkParseLineWith5TagsCache(b *testing.B) {
+	usePacketCache = true
+	d := []byte("a.key.with-0.dash.^host=dev.^env=prod.^product=sth.^key1=val1.^key2=val2:1|c|@0.5")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}
 }
-func BenchmarkParseLineWith1TagCorrect(b *testing.B) {
-	d := []byte("cache.hit.^con=en:4|c")
+
+func BenchmarkParseLineWith1TagCorrectCache(b *testing.B) {
+	usePacketCache = true
+	d := []byte("cache.hit.^con=en:1|c")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+
+func BenchmarkParseLineRateNoCache(b *testing.B) {
+	usePacketCache = false
+	d := []byte("a.key.with-0.dash:1|c|@0.5")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+
+func BenchmarkParseLineWith5TagsNoCache(b *testing.B) {
+	usePacketCache = false
+	d := []byte("a.key.with-0.dash.^host=dev.^env=prod.^product=sth.^key1=val1.^key2=val2:1|c|@0.5")
+	for i := 0; i < b.N; i++ {
+		parseLine(d)
+	}
+}
+
+
+
+func BenchmarkParseLineWith1TagCorrectNoCache(b *testing.B) {
+	usePacketCache = false
+	d := []byte("cache.hit.^con=en:1|c")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}
 }
 func BenchmarkParseLineWith1TagError(b *testing.B) {
-	d := []byte("cache.hit.^con=en::4|c")
+	d := []byte("cache.hit.^con=en::1|c")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}
@@ -899,7 +1117,7 @@ func BenchmarkParseLineWith1TagErrorAndSyslog(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	d := []byte("cache.hit.^con=en::4|c")
+	d := []byte("cache.hit.^con=en::1|c")
 	for i := 0; i < b.N; i++ {
 		parseLine(d)
 	}

@@ -6,22 +6,35 @@ import (
 	"github.com/shirou/gopsutil/process"
 	"os"
 	"sync"
+	"time"
+	"github.com/patrickmn/go-cache"
 )
 
 type internalDaemonStat struct {
-	PointsReceived      int64
-	PointsReceivedRate  float64
-	PointsParseFail     int64
-	PointsSoftParseFail int64
-	BytesReceived       int64
-	ReadFail            int64
-	BatchesTransmitted  int64
-	BatchesTransmitFail int64
-	PointsTransmitted   int64
-	OtherErrors         int64
-	MemGauge            *process.MemoryInfoStat
-	QueueLen            int64
-	CPUPercent          float64
+	PointsReceived         int64
+	PointsReceivedRate     float64
+	PointsParseFail        int64
+	PointsSoftParseFail    int64
+	BytesReceived          int64
+	ReadFail               int64
+	BatchesTransmitted     int64
+	BatchesTransmitFail    int64
+	PointsTransmitted      int64
+	OtherErrors            int64
+	PointsReceivedCounter  int64
+	PointsReceivedGauge    int64
+	PointsReceivedSet      int64
+	PointsReceivedTimer    int64
+	PointsReceivedKeyValue int64
+	MemGauge               *process.MemoryInfoStat
+	QueueLen               int64
+	CPUPercent             float64
+	PacketCacheHit         int64
+	PacketCacheMiss        int64
+	PacketCacheSize        int64
+	NameCacheHit           int64
+	NameCacheMiss          int64
+	NameCacheSize          int64
 }
 
 type DaemonStat struct {
@@ -32,10 +45,17 @@ type DaemonStat struct {
 	Interval  int64
 }
 
-func (ds *DaemonStat) Init() {
+func (ds *DaemonStat) Init(q chan *Packet, t time.Duration, interval int64) {
+	// batch send interval
+	ds.Interval = interval
+
 	ds.Process, _ = process.NewProcess(int32(os.Getpid()))
 	// start counting CPU usage
 	ds.CPUPercent()
+
+	// start background incoming queue len monitoring every t time
+	go ds.QueueStats(q, t)
+
 }
 
 func (ds *DaemonStat) CPUPercent() {
@@ -134,6 +154,59 @@ func (ds *DaemonStat) PointsTransmittedInc(n int64) {
 	ds.curStat.PointsTransmitted += n
 }
 
+func (ds *DaemonStat) PointTypeInc(p *Packet) {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+
+	switch p.Modifier {
+	case "c":
+		ds.curStat.PointsReceivedCounter++
+	case "g":
+		ds.curStat.PointsReceivedGauge++
+	case "s":
+		ds.curStat.PointsReceivedSet++
+	case "ms":
+		ds.curStat.PointsReceivedTimer++
+	case "kv":
+		ds.curStat.PointsReceivedKeyValue++
+	}
+}
+
+func (ds *DaemonStat) PacketCacheHit() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.PacketCacheHit++
+}
+
+func (ds *DaemonStat) PacketCacheMiss() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.PacketCacheMiss++
+}
+
+func (ds *DaemonStat) PacketCacheSize(c *cache.Cache) {
+	ds.curStat.PacketCacheSize=int64(c.ItemCount())
+}
+
+
+
+func (ds *DaemonStat) NameCacheHit() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.NameCacheHit++
+}
+
+func (ds *DaemonStat) NameCacheMiss() {
+	ds.RWMutex.Lock()
+	defer ds.RWMutex.Unlock()
+	ds.curStat.NameCacheMiss++
+}
+
+func (ds *DaemonStat) NameCacheSize(c *cache.Cache) {
+	ds.curStat.NameCacheSize=int64(c.ItemCount())
+}
+
+
 func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
 
 	var ok bool
@@ -206,6 +279,70 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	}
 	countersMap[otherErrors] += ds.savedStat.OtherErrors
 
+	pointsReceivedCounter := makeBucketName(globalPrefix, metricNamePrefix, "point.received.counter", extraTagsStr)
+	_, ok = countersMap[pointsReceivedCounter]
+	if !ok {
+		countersMap[pointsReceivedCounter] = 0
+	}
+	countersMap[pointsReceivedCounter] += ds.savedStat.PointsReceivedCounter
+
+	pointsReceivedGauge := makeBucketName(globalPrefix, metricNamePrefix, "point.received.gauge", extraTagsStr)
+	_, ok = countersMap[pointsReceivedGauge]
+	if !ok {
+		countersMap[pointsReceivedGauge] = 0
+	}
+	countersMap[pointsReceivedGauge] += ds.savedStat.PointsReceivedGauge
+
+	pointsReceivedSet := makeBucketName(globalPrefix, metricNamePrefix, "point.received.set", extraTagsStr)
+	_, ok = countersMap[pointsReceivedSet]
+	if !ok {
+		countersMap[pointsReceivedSet] = 0
+	}
+	countersMap[pointsReceivedSet] += ds.savedStat.PointsReceivedSet
+
+	pointsReceivedTimer := makeBucketName(globalPrefix, metricNamePrefix, "point.received.timer", extraTagsStr)
+	_, ok = countersMap[pointsReceivedTimer]
+	if !ok {
+		countersMap[pointsReceivedTimer] = 0
+	}
+	countersMap[pointsReceivedTimer] += ds.savedStat.PointsReceivedTimer
+
+	pointsReceivedKeyValue := makeBucketName(globalPrefix, metricNamePrefix, "point.received.keyvalue", extraTagsStr)
+	_, ok = countersMap[pointsReceivedKeyValue]
+	if !ok {
+		countersMap[pointsReceivedKeyValue] = 0
+	}
+	countersMap[pointsReceivedKeyValue] += ds.savedStat.PointsReceivedKeyValue
+
+	packetCacheHit := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.hit", extraTagsStr)
+	_, ok = countersMap[packetCacheHit]
+	if !ok {
+		countersMap[packetCacheHit] = 0
+	}
+	countersMap[packetCacheHit] += ds.savedStat.PacketCacheHit
+
+	packetCacheMiss := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.miss", extraTagsStr)
+	_, ok = countersMap[packetCacheMiss]
+	if !ok {
+		countersMap[packetCacheMiss] = 0
+	}
+	countersMap[packetCacheMiss] += ds.savedStat.PacketCacheMiss
+
+	nameCacheHit := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.hit", extraTagsStr)
+	_, ok = countersMap[nameCacheHit]
+	if !ok {
+		countersMap[nameCacheHit] = 0
+	}
+	countersMap[nameCacheHit] += ds.savedStat.NameCacheHit
+
+	nameCacheMiss := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.miss", extraTagsStr)
+	_, ok = countersMap[nameCacheMiss]
+	if !ok {
+		countersMap[nameCacheMiss] = 0
+	}
+	countersMap[nameCacheMiss] += ds.savedStat.NameCacheMiss
+
+
 	// Gauges
 	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.received.rate", extraTagsStr)
 	gaugesMap[pointsRate] = ds.savedStat.PointsReceivedRate
@@ -215,6 +352,13 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 
 	cpuPercent := makeBucketName(globalPrefix, metricNamePrefix, "cpu.percent", extraTagsStr)
 	gaugesMap[cpuPercent] = float64(ds.savedStat.CPUPercent)
+
+	packetCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.size", extraTagsStr)
+	gaugesMap[packetCacheSize] = float64(ds.savedStat.PacketCacheSize)
+
+	nameCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.size", extraTagsStr)
+	gaugesMap[nameCacheSize] = float64(ds.savedStat.NameCacheSize)
+
 
 	if ds.savedStat.MemGauge != nil {
 		memRSS := makeBucketName(globalPrefix, metricNamePrefix, "memory.rss", extraTagsStr)
@@ -231,21 +375,39 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 
 }
 
-func (ds *DaemonStat) ProcessStats() {
+// QueueStats - incoming queue len monitoring every t time
+func (ds *DaemonStat) QueueStats(c chan *Packet, t time.Duration) {
+
+	for {
+		l := int64(len(c))
+
+		ds.RWMutex.Lock()
+		if l > ds.curStat.QueueLen {
+			ds.curStat.QueueLen = l
+		}
+		ds.RWMutex.Unlock()
+
+		time.Sleep(t)
+
+	}
+
+}
+
+func (ds *DaemonStat) ProcessStats(packetCache, nameCache *cache.Cache) {
 
 	memInfo, _ := ds.Process.MemoryInfo()
 	cpuPercent, _ := ds.Process.Percent(0)
+	nameSize := int64(nameCache.ItemCount())
+	packetSize := int64(packetCache.ItemCount())
 
 	ds.RWMutex.Lock()
 	defer ds.RWMutex.Unlock()
 
 	ds.curStat.MemGauge = memInfo
 	ds.curStat.CPUPercent = cpuPercent
-
+	ds.curStat.NameCacheSize=nameSize
+	ds.curStat.PacketCacheSize = packetSize
 	ds.curStat.PointsReceivedRate = float64(ds.curStat.PointsReceived) / float64(ds.Interval)
-
-	// FIXME using GLOBAL channel In
-	ds.curStat.QueueLen = int64(len(In))
 
 	ds.savedStat = ds.curStat
 	ds.curStat = internalDaemonStat{}

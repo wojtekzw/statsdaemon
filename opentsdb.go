@@ -20,6 +20,7 @@ func StructPrettyPrint(s interface{}) string {
 }
 
 func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
+
 	logCtx := log.WithFields(log.Fields{
 		"in": "openTSDB",
 	})

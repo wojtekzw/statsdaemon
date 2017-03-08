@@ -20,11 +20,12 @@ import (
 	"github.com/jinzhu/configor"
 	flag "github.com/ogier/pflag"
 	"gopkg.in/yaml.v2"
+	"runtime/pprof"
 )
 
 // Network constants & dbName
 const (
-	maxUnprocessedPackets = 20000
+	maxUnprocessedPackets = 40000
 
 	tcpReadSize     = 4096
 	maxUDPPacket    = 1432
@@ -74,6 +75,7 @@ type ConfigApp struct {
 // Global vars for command line flags
 var (
 	configFile *string
+	cpuprofile *string
 	Config     = ConfigApp{}
 	ConfigYAML = ConfigApp{}
 	Stat       = DaemonStat{}
@@ -116,6 +118,8 @@ func readConfig(parse bool) {
 	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
 
 	configFile = flag.String("config", "", "Configuration file name (warning not error if not exists). Standard: "+configPath)
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+
 	flag.StringVar(&Config.UDPServiceAddress, "udp-addr", ConfigYAML.UDPServiceAddress, "UDP listen service address")
 	flag.StringVar(&Config.TCPServiceAddress, "tcp-addr", ConfigYAML.TCPServiceAddress, "TCP listen service address, if set")
 	flag.Int64Var(&Config.MaxUDPPacketSize, "max-udp-packet-size", ConfigYAML.MaxUDPPacketSize, "Maximum UDP packet size")
@@ -232,6 +236,16 @@ func main() {
 		os.Exit(1)
 	}
 
+	//Profile
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
+
 	if Config.ShowVersion {
 		fmt.Printf("statsdaemon v%s (built w/%s)\nBuildDate: %s\nGitHash: %s\n", StatsdaemonVersion, runtime.Version(), BuildDate, GitHash)
 		os.Exit(0)
@@ -275,8 +289,6 @@ func main() {
 		}
 	}
 
-	//log.SetFormatter(&log.TextFormatter{DisableColors: true})
-
 	if Config.LogName == "" {
 		log.SetOutput(ioutil.Discard)
 	}
@@ -288,11 +300,10 @@ func main() {
 	// }
 
 	// Stat
-	Stat.Init()
-	Stat.Interval = Config.FlushInterval
+	Stat.Init(In, 200*time.Millisecond, Config.FlushInterval)
 
 	signalchan = make(chan os.Signal, 1)
-	signal.Notify(signalchan, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(signalchan, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
 
 	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {

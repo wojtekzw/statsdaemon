@@ -8,6 +8,7 @@ import (
 )
 
 func submit(deadline time.Time, backend string) error {
+
 	var buffer bytes.Buffer
 	var num int64
 
@@ -17,7 +18,8 @@ func submit(deadline time.Time, backend string) error {
 	})
 
 	// Prepare internal stats (make a copy, reset current counters)
-	Stat.ProcessStats()
+	Stat.ProcessStats(packetCache,nameCache)
+
 	if !Config.DisableStatSend {
 		Stat.WriteMetrics(counters, gauges, timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
 	}

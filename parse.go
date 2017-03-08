@@ -9,7 +9,21 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/patrickmn/go-cache"
+	"time"
+
 )
+
+var (
+	nameCache   *cache.Cache
+	packetCache *cache.Cache
+	usePacketCache bool = true
+)
+
+func init() {
+	nameCache = cache.New(170*time.Minute, 4*time.Minute)
+	packetCache = cache.New(55*time.Minute, 6*time.Minute)
+}
 
 // GaugeData - struct for gauges :)
 type GaugeData struct {
@@ -22,14 +36,13 @@ type GaugeData struct {
 type Packet struct {
 	Bucket      string
 	Value       interface{}
-	SrcBucket   string
 	CleanBucket string
-	// Tags        map[string]string
-	Modifier string
-	Sampling float32
+	Modifier    string
+	Sampling    float32
 }
 
 func parseTo(conn io.ReadCloser, partialReads bool, out chan<- *Packet) {
+
 	defer conn.Close()
 
 	parser := NewParser(conn, partialReads)
@@ -143,13 +156,26 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 	return nil, input
 }
 
+
 func parseLine(line []byte) *Packet {
+
+	var cachedPacket Packet
+	if usePacketCache {
+		// check if we have cached full line for counter 1  and get if from cache
+		if val, found := packetCache.Get(string(line)); found {
+			cachedPacket = val.(Packet)
+
+			Stat.PointTypeInc(&cachedPacket)
+			Stat.PacketCacheHit()
+			return &cachedPacket
+		}
+	}
+
+	Stat.PacketCacheMiss()
 
 	logCtx := log.WithFields(log.Fields{
 		"in": "parseLine",
 	})
-
-	tagsFromBucketName := make(map[string]string)
 
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
@@ -162,6 +188,7 @@ func parseLine(line []byte) *Packet {
 	typeCode := string(split[1]) // expected c, g, s, ms, kv
 
 	sampling := float32(1)
+	// read sampling from line
 	if strings.HasPrefix(typeCode, "c") || strings.HasPrefix(typeCode, "ms") {
 		if len(split) == 3 && len(split[2]) > 0 && split[2][0] == '@' {
 			f64, err := strconv.ParseFloat(string(split[2][1:]), 32)
@@ -188,6 +215,8 @@ func parseLine(line []byte) *Packet {
 		Stat.PointsParseFailInc()
 		return nil
 	}
+
+
 
 	var (
 		err         error
@@ -249,32 +278,65 @@ func parseLine(line []byte) *Packet {
 	}
 
 	// parse tags from bucket name
-	tagsFromBucketName = map[string]string{}
-	cleanBucket, tagsFromBucketName, err = parseBucketAndTags(string(name))
-	if err != nil {
-		logCtx.Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
-		Stat.PointsParseFailInc()
-		return nil
+
+	type bucketNames struct {
+		bucket      string
+		srcBucket   string
+		cleanBucket string
 	}
 
-	// bucket is set to a name WITH tags
-	firstDelim := ""
-	if len(tagsFromBucketName) > 0 || len(Config.ExtraTagsHash) > 0 {
-		firstDelim, _, _ = tagsDelims(tfDefault)
-	}
-	bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tagsFromBucketName, Config.ExtraTagsHash), tfDefault)
+	var cachedBucket bucketNames
 
-	return &Packet{
+	if val, found := nameCache.Get(string(name)); found {
+		Stat.NameCacheHit()
+		cachedBucket = val.(bucketNames)
+		bucket = cachedBucket.bucket
+		cleanBucket = cachedBucket.cleanBucket
+	} else {
+
+		Stat.NameCacheMiss()
+
+		tagsFromBucketName := make(map[string]string)
+		cleanBucket, tagsFromBucketName, err = parseBucketAndTags(string(name))
+		if err != nil {
+			logCtx.Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
+			Stat.PointsParseFailInc()
+			return nil
+		}
+
+		// bucket is set to a name WITH tags
+		firstDelim := ""
+		if len(tagsFromBucketName) > 0 || len(Config.ExtraTagsHash) > 0 {
+			firstDelim, _, _ = tagsDelims(tfDefault)
+		}
+		bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tagsFromBucketName, Config.ExtraTagsHash), tfDefault)
+
+		cachedBucket = bucketNames{bucket: bucket, srcBucket: string(name), cleanBucket: cleanBucket}
+		nameCache.Set(string(name), cachedBucket, cache.DefaultExpiration)
+	}
+
+	returnPacket := &Packet{
 		Bucket:      bucket,
 		Value:       value,
-		SrcBucket:   string(name),
 		CleanBucket: cleanBucket,
 		Modifier:    typeCode,
 		Sampling:    sampling,
 	}
+
+	Stat.PointTypeInc(returnPacket)
+
+	if usePacketCache {
+		// add full packet to cache
+		if returnPacket.Modifier == "c" && returnPacket.Value.(int64) == 1 {
+			packetCache.Set(string(line), *returnPacket, cache.DefaultExpiration)
+		}
+	}
+
+	return returnPacket
 }
 
 func sanitizeBucket(bucket string) string {
+
 	b := make([]byte, len(bucket))
 	var bl int
 
@@ -296,6 +358,7 @@ func sanitizeBucket(bucket string) string {
 }
 
 func removeEmptyLines(lines []string) []string {
+
 	var outLines []string
 
 	for _, v := range lines {
@@ -307,5 +370,6 @@ func removeEmptyLines(lines []string) []string {
 }
 
 func fixNewLine(s string) string {
+
 	return strings.Replace(s, "\n", "\\n", -1)
 }

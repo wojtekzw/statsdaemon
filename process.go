@@ -14,6 +14,7 @@ import (
 // packetHandler - process parsed packet and set data in
 // global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
+
 	// New stat variable
 	Stat.PointsReceivedInc()
 
@@ -82,6 +83,7 @@ func packetHandler(s *Packet) {
 }
 
 func formatMetricOutput(bucket string, value interface{}, now int64, backend string) string {
+
 	var ret, val string
 	logCtx := log.WithFields(log.Fields{
 		"in": "formatMetricOutput",
@@ -199,6 +201,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 }
 
 func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
+
 	var num int64
 
 	for bucket, gauge := range gauges {
@@ -232,6 +235,7 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 }
 
 func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
+
 	num := int64(len(sets))
 	for bucket, set := range sets {
 
@@ -248,6 +252,7 @@ func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
 }
 
 func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
+
 	num := int64(len(keys))
 	for bucket, values := range keys {
 		uniqueKeyVal := map[string]bool{}
@@ -268,6 +273,7 @@ func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 }
 
 func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend string) int64 {
+
 	// FIXME - chceck float64 conversion
 	var num int64
 

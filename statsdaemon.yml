@@ -24,7 +24,8 @@ percent-threshold:
 - value: 95
   name: "95"
 extra-tags: ""
-log-name: "/tmp/statsdaemon.log"
+#log-name: "/tmp/statsdaemon.log"
+log-name: ""
 log-to-syslog: false
 # log to unix socket
 syslog-udp-address: ""

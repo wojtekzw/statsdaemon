@@ -45,21 +45,11 @@ const (
 )
 
 func tagsDelims(tf uint) (string, string, string) {
+
 	var (
 		firstDelim, kvDelim, tagsDelim string
 	)
 
-	logCtx := log.WithFields(log.Fields{
-		"in": "tagsDelims",
-	})
-	// checking tf in default in switch is too late
-	// doing it now
-
-	if tf != tfCaret && tf != tfGraphite && tf != tfURI && tf != tfPretty {
-		logCtx.WithField("after", "check delim type").Errorf("Unknown tag format %d. Setting to default = %d", tf, tfDefault)
-		Stat.OtherErrorsInc()
-		tf = tfDefault
-	}
 	switch tf {
 	case tfCaret:
 		firstDelim = tfCaretFirstDelim
@@ -80,6 +70,8 @@ func tagsDelims(tf uint) (string, string, string) {
 		firstDelim = tfPrettyFirstDelim
 		kvDelim = tfPrettyKVDelim
 		tagsDelim = tfPrettyTagsDelim
+	default:
+		log.Fatalf("Unknown tag format %d. Setting to default = %d", tf, tfDefault)
 
 	}
 	return firstDelim, kvDelim, tagsDelim
@@ -119,6 +111,7 @@ func (t tagSlice) String() string {
 }
 
 func tagsToSortedSlice(tagMap map[string]string) tagSlice {
+
 	tags := make(tagSlice, 0, len(tagMap))
 	for t := range tagMap {
 		tags = append(tags, tagStruct{Key: t, Val: tagMap[t]})
@@ -148,7 +141,6 @@ func addTags(t1, t2 map[string]string) map[string]string {
 }
 
 func normalizeTags(t map[string]string, tf uint) string {
-
 	return tagsToSortedSlice(t).StringType(tf)
 }
 
@@ -187,6 +179,14 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 
 	tagsSlice := strings.Split(name, tfCaretDelim)
 	if len(tagsSlice) == 0 || tagsSlice[0] == "" {
+		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
+	}
+
+	if strings.HasSuffix(name, ".") {
+		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
+	}
+
+	if strings.Index(name, "..") > -1 {
 		return "", nil, fmt.Errorf("Format error: Invalid bucket name in \"%s\"", name)
 	}
 
