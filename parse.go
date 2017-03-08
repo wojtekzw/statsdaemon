@@ -11,18 +11,17 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/patrickmn/go-cache"
 	"time"
-
 )
 
 var (
-	nameCache   *cache.Cache
-	packetCache *cache.Cache
+	nameCache      *cache.Cache
+	packetCache    *cache.Cache
 	usePacketCache bool = true
 )
 
 func init() {
-	nameCache = cache.New(170*time.Minute, 4*time.Minute)
-	packetCache = cache.New(55*time.Minute, 6*time.Minute)
+	nameCache = cache.New(145*time.Minute, 7*time.Minute)
+	packetCache = cache.New(75*time.Minute, 9*time.Minute)
 }
 
 // GaugeData - struct for gauges :)
@@ -34,11 +33,10 @@ type GaugeData struct {
 
 // Packet - meter definition, read from statsd format
 type Packet struct {
-	Bucket      string
-	Value       interface{}
-	CleanBucket string
-	Modifier    string
-	Sampling    float32
+	Bucket   string
+	Value    interface{}
+	Modifier string
+	Sampling float32
 }
 
 func parseTo(conn io.ReadCloser, partialReads bool, out chan<- *Packet) {
@@ -156,7 +154,6 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 	return nil, input
 }
 
-
 func parseLine(line []byte) *Packet {
 
 	var cachedPacket Packet
@@ -215,8 +212,6 @@ func parseLine(line []byte) *Packet {
 		Stat.PointsParseFailInc()
 		return nil
 	}
-
-
 
 	var (
 		err         error
@@ -280,9 +275,8 @@ func parseLine(line []byte) *Packet {
 	// parse tags from bucket name
 
 	type bucketNames struct {
-		bucket      string
-		srcBucket   string
-		cleanBucket string
+		bucket    string
+		srcBucket string
 	}
 
 	var cachedBucket bucketNames
@@ -291,7 +285,6 @@ func parseLine(line []byte) *Packet {
 		Stat.NameCacheHit()
 		cachedBucket = val.(bucketNames)
 		bucket = cachedBucket.bucket
-		cleanBucket = cachedBucket.cleanBucket
 	} else {
 
 		Stat.NameCacheMiss()
@@ -299,7 +292,7 @@ func parseLine(line []byte) *Packet {
 		tagsFromBucketName := make(map[string]string)
 		cleanBucket, tagsFromBucketName, err = parseBucketAndTags(string(name))
 		if err != nil {
-			logCtx.Errorf("Problem parsing %s (clean version %s): %v\n", string(name), cleanBucket, err)
+			logCtx.Errorf("Problem parsing %s: %v\n", string(name), err)
 			Stat.PointsParseFailInc()
 			return nil
 		}
@@ -311,16 +304,15 @@ func parseLine(line []byte) *Packet {
 		}
 		bucket = Config.Prefix + sanitizeBucket(cleanBucket) + firstDelim + normalizeTags(addTags(tagsFromBucketName, Config.ExtraTagsHash), tfDefault)
 
-		cachedBucket = bucketNames{bucket: bucket, srcBucket: string(name), cleanBucket: cleanBucket}
+		cachedBucket = bucketNames{bucket: bucket, srcBucket: string(name)}
 		nameCache.Set(string(name), cachedBucket, cache.DefaultExpiration)
 	}
 
 	returnPacket := &Packet{
-		Bucket:      bucket,
-		Value:       value,
-		CleanBucket: cleanBucket,
-		Modifier:    typeCode,
-		Sampling:    sampling,
+		Bucket:   bucket,
+		Value:    value,
+		Modifier: typeCode,
+		Sampling: sampling,
 	}
 
 	Stat.PointTypeInc(returnPacket)
