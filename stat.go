@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 	"github.com/patrickmn/go-cache"
+	"runtime"
 )
 
 type internalDaemonStat struct {
@@ -35,6 +36,7 @@ type internalDaemonStat struct {
 	NameCacheHit           int64
 	NameCacheMiss          int64
 	NameCacheSize          int64
+	Goroutines             int
 }
 
 type DaemonStat struct {
@@ -55,6 +57,9 @@ func (ds *DaemonStat) Init(q chan *Packet, t time.Duration, interval int64) {
 
 	// start background incoming queue len monitoring every t time
 	go ds.QueueStats(q, t)
+
+	// monitor number of goroutines
+	go ds.GoroutinesStats(t)
 
 }
 
@@ -85,9 +90,9 @@ func (ds *DaemonStat) String() string {
 	s = s + fmt.Sprintf("OtherErrors: %d errors, ", ds.savedStat.OtherErrors)
 
 	if ds.savedStat.MemGauge != nil {
-		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS)/(1024*1024))
-		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS)/(1024*1024))
-		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap)/(1024*1024))
+		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS) / (1024 * 1024))
+		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS) / (1024 * 1024))
+		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap) / (1024 * 1024))
 	}
 	s = s + fmt.Sprintf("CPUPercent: %.1f%%, ", ds.savedStat.CPUPercent)
 	s = s + fmt.Sprintf("QueueLen: %d, ", ds.savedStat.QueueLen)
@@ -185,10 +190,8 @@ func (ds *DaemonStat) PacketCacheMiss() {
 }
 
 func (ds *DaemonStat) PacketCacheSize(c *cache.Cache) {
-	ds.curStat.PacketCacheSize=int64(c.ItemCount())
+	ds.curStat.PacketCacheSize = int64(c.ItemCount())
 }
-
-
 
 func (ds *DaemonStat) NameCacheHit() {
 	ds.RWMutex.Lock()
@@ -203,9 +206,8 @@ func (ds *DaemonStat) NameCacheMiss() {
 }
 
 func (ds *DaemonStat) NameCacheSize(c *cache.Cache) {
-	ds.curStat.NameCacheSize=int64(c.ItemCount())
+	ds.curStat.NameCacheSize = int64(c.ItemCount())
 }
-
 
 func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
 
@@ -359,6 +361,8 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	nameCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.size", extraTagsStr)
 	gaugesMap[nameCacheSize] = float64(ds.savedStat.NameCacheSize)
 
+	goroutines := makeBucketName(globalPrefix, metricNamePrefix, "goroutines.number", extraTagsStr)
+	gaugesMap[goroutines] = float64(ds.savedStat.Goroutines)
 
 	if ds.savedStat.MemGauge != nil {
 		memRSS := makeBucketName(globalPrefix, metricNamePrefix, "memory.rss", extraTagsStr)
@@ -393,6 +397,24 @@ func (ds *DaemonStat) QueueStats(c chan *Packet, t time.Duration) {
 
 }
 
+// GoroutinesStats - max number of goroutines monitored  every t time
+func (ds *DaemonStat) GoroutinesStats(t time.Duration) {
+
+	for {
+		n := runtime.NumGoroutine()
+
+		ds.RWMutex.Lock()
+		if n > ds.curStat.Goroutines {
+			ds.curStat.Goroutines = n
+		}
+		ds.RWMutex.Unlock()
+
+		time.Sleep(t)
+
+	}
+
+}
+
 func (ds *DaemonStat) ProcessStats(packetCache, nameCache *cache.Cache) {
 
 	memInfo, _ := ds.Process.MemoryInfo()
@@ -405,7 +427,7 @@ func (ds *DaemonStat) ProcessStats(packetCache, nameCache *cache.Cache) {
 
 	ds.curStat.MemGauge = memInfo
 	ds.curStat.CPUPercent = cpuPercent
-	ds.curStat.NameCacheSize=nameSize
+	ds.curStat.NameCacheSize = nameSize
 	ds.curStat.PacketCacheSize = packetSize
 	ds.curStat.PointsReceivedRate = float64(ds.curStat.PointsReceived) / float64(ds.Interval)
 
@@ -434,14 +456,14 @@ func normalizeDot(s string, suffixExists bool) string {
 	}
 
 	if suffixExists {
-		if s[len(s)-1] == byte('.') {
+		if s[len(s) - 1] == byte('.') {
 			return s
 		}
 		return s + "."
 	}
 
-	if s[len(s)-1] == byte('.') {
-		return s[0 : len(s)-1]
+	if s[len(s) - 1] == byte('.') {
+		return s[0 : len(s) - 1]
 	}
 	return s
 

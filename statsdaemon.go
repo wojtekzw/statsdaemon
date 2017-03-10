@@ -419,7 +419,7 @@ func monitor() {
 				Stat.OtherErrorsInc()
 			}
 		case s := <-In:
-			packetHandler(s)
+			go packetHandler(s)
 		}
 	}
 }

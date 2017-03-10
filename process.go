@@ -9,29 +9,47 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
+	"sync"
+)
+
+var (
+	timerMutex sync.RWMutex
+	gaugeMutex sync.RWMutex
+	counterMutex sync.RWMutex
+	setMutex sync.RWMutex
+	kvMutex sync.RWMutex
+	//concurrencyGuard = make(chan struct{}, 4)
 )
 
 // packetHandler - process parsed packet and set data in
 // global variables: tags, timers,gauges,counters,sets,keys
+// function is thread-safe - can be used in many goroutines
 func packetHandler(s *Packet) {
 
-	// New stat variable
+	//concurrencyGuard <- struct{}{}
+	//defer func() { <-concurrencyGuard }()
+
 	Stat.PointsReceivedInc()
 
-	// global var tags
-	// tags[s.Bucket] = s.Tags
 
 	switch s.Modifier {
 	// timer
 	case "ms":
+		timerMutex.Lock()
+
 		_, ok := timers[s.Bucket]
 		if !ok {
 			var t Float64Slice
 			timers[s.Bucket] = t
 		}
 		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(float64))
-		// gauge
+
+		timerMutex.Unlock()
+
+// gauge
 	case "g":
+		gaugeMutex.Lock()
+
 		gaugeValue, _ := gauges[s.Bucket]
 
 		gaugeData := s.Value.(GaugeData)
@@ -56,30 +74,49 @@ func packetHandler(s *Packet) {
 		}
 
 		gauges[s.Bucket] = gaugeValue
-		// counter
+
+		gaugeMutex.Unlock()
+
+// counter
 	case "c":
+		counterMutex.Lock()
+
 		_, ok := counters[s.Bucket]
 		if !ok {
 			counters[s.Bucket] = 0
 		}
-		// countInactivity[s.Bucket] = 0
 
 		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
+
+		counterMutex.Unlock()
+
 		// set
 	case "s":
+		setMutex.Lock()
+
 		_, ok := sets[s.Bucket]
 		if !ok {
 			sets[s.Bucket] = make([]string, 0)
 		}
 		sets[s.Bucket] = append(sets[s.Bucket], s.Value.(string))
-		// key/value
+
+		setMutex.Unlock()
+
+
+
+// key/value
 	case "kv":
+		kvMutex.Lock()
+
 		_, ok := keys[s.Bucket]
 		if !ok {
 			keys[s.Bucket] = make([]string, 0)
 		}
 		keys[s.Bucket] = append(keys[s.Bucket], s.Value.(string))
+
+		kvMutex.Unlock()
 	}
+
 }
 
 func formatMetricOutput(bucket string, value interface{}, now int64, backend string) string {

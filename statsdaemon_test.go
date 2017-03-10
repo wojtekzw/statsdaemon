@@ -1122,3 +1122,87 @@ func BenchmarkParseLineWith1TagErrorAndSyslog(b *testing.B) {
 		parseLine(d)
 	}
 }
+
+func BenchmarkPacketHandlerCounter(b *testing.B) {
+	counters = make(map[string]int64)
+
+	p := &Packet{
+		Bucket:   "gorets",
+		Value:    int64(1),
+		Modifier: "c",
+		Sampling: float32(1),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		packetHandler(p)
+	}
+
+}
+
+
+func BenchmarkPacketHandlerGauge(b *testing.B) {
+	gauges = make(map[string]float64)
+
+	p := &Packet{
+		Bucket:   "gaugor",
+		Value:    GaugeData{false, false, 333},
+		Modifier: "g",
+		Sampling: float32(1),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		packetHandler(p)
+	}
+}
+
+
+func BenchmarkPacketHandlerTimer(b *testing.B) {
+	timers = make(map[string]Float64Slice)
+
+	p := &Packet{
+		Bucket:   "glork",
+		Value:    float64(320),
+		Modifier: "ms",
+		Sampling: float32(1),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		packetHandler(p)
+	}
+}
+
+
+func BenchmarkPacketHandlerSet(b *testing.B) {
+	sets = make(map[string][]string)
+
+	p := &Packet{
+		Bucket:   "uniques",
+		Value:    "765",
+		Modifier: "s",
+		Sampling: float32(1),
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		packetHandler(p)
+	}
+
+}
+
+
+func BenchmarkReadStructChan(b *testing.B) {
+	ch := make(chan struct{}, 1000000)
+	b.ResetTimer()
+	go func() {
+		for {
+			ch <- struct{}{}
+		}
+	}()
+
+	for i := 0; i < b.N; i++ {
+		<-ch
+	}
+}
