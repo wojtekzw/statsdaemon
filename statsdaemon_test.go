@@ -14,7 +14,6 @@ import (
 	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
 	"github.com/bmizerany/assert"
 	"github.com/boltdb/bolt"
-	flag "github.com/ogier/pflag"
 	"log/syslog"
 )
 
@@ -197,7 +196,6 @@ func TestParseLineCount(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
 
-
 	// check packet cache
 	d = []byte("gorets:-1|c")
 	packet = parseLine(d)
@@ -215,7 +213,6 @@ func TestParseLineCount(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
 
-
 }
 
 func TestPacketCacheInParseLineCount(t *testing.T) {
@@ -227,7 +224,6 @@ func TestPacketCacheInParseLineCount(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(0.1), packet.Sampling)
 
-
 	d = []byte("gorets:1|c|@0.1")
 	packet = parseLine(d)
 	assert.NotEqual(t, packet, nil)
@@ -236,7 +232,6 @@ func TestPacketCacheInParseLineCount(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(0.1), packet.Sampling)
 
-
 	d = []byte("gorets:1|c")
 	packet = parseLine(d)
 	assert.NotEqual(t, packet, nil)
@@ -269,8 +264,6 @@ func TestPacketCacheInParseLineCount(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
 
-
-
 	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:1|c")
 	packet = parseLine(d)
 	assert.NotEqual(t, packet, nil)
@@ -278,7 +271,6 @@ func TestPacketCacheInParseLineCount(t *testing.T) {
 	assert.Equal(t, int64(1), packet.Value.(int64))
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
-
 
 	d = []byte("a.key.with-0.dash.^9key=val9.^1key=val1.^7key=val7:1|c")
 	packet = parseLine(d)
@@ -303,10 +295,8 @@ func TestPacketCacheInParseLineCount(t *testing.T) {
 	assert.Equal(t, int64(-1), packet.Value.(int64))
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
-
 
 }
-
 
 func TestParseLineTimer(t *testing.T) {
 	d := []byte("glork:320|ms")
@@ -366,7 +356,7 @@ func TestParseLineMisc(t *testing.T) {
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
 
-	flag.Set("prefix", "test.")
+	Config.Prefix = "test."
 
 	d = []byte("prefix:4|c")
 	packet = parseLine(d)
@@ -374,7 +364,7 @@ func TestParseLineMisc(t *testing.T) {
 	assert.Equal(t, int64(4), packet.Value.(int64))
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
-	flag.Set("prefix", "")
+	Config.Prefix = ""
 
 	d = []byte("counter0:11|c|@0.001\na.key.with-0.dash:4|c\ngauge:3|g\ncounter:10|c|@0.01")
 	parser := NewParser(bytes.NewBuffer(d), true)
@@ -508,7 +498,6 @@ func TestParseLineTags(t *testing.T) {
 	assert.Equal(t, int64(4), packet.Value.(int64))
 	assert.Equal(t, "c", packet.Modifier)
 	assert.Equal(t, float32(1), packet.Sampling)
-
 
 	d = []byte("a.key.with-0.dash.^key2=val2...^key1=val1:4|c")
 	packet = parseLine(d)
@@ -753,7 +742,8 @@ func TestProcessTimers(t *testing.T) {
 
 func TestProcessGauges(t *testing.T) {
 	// Some data with expected mean of 20
-	flag.Set("delete-gauges", "false")
+
+	Config.DeleteGauges = false
 	gauges = make(map[string]float64)
 	gauges["gaugor"] = math.MaxUint64
 
@@ -777,7 +767,7 @@ func TestProcessGauges(t *testing.T) {
 
 func TestProcessDeleteGauges(t *testing.T) {
 	// Some data with expected mean of 20
-	flag.Set("delete-gauges", "true")
+	Config.DeleteGauges = true
 	gauges = make(map[string]float64)
 	gauges["gaugordelete"] = math.MaxUint64
 
@@ -1050,7 +1040,6 @@ func TestMultipleUDPSends(t *testing.T) {
 //
 //}
 
-
 func BenchmarkParseLineRateCache(b *testing.B) {
 	usePacketCache = true
 	d := []byte("a.key.with-0.dash:1|c|@0.5")
@@ -1090,8 +1079,6 @@ func BenchmarkParseLineWith5TagsNoCache(b *testing.B) {
 		parseLine(d)
 	}
 }
-
-
 
 func BenchmarkParseLineWith1TagCorrectNoCache(b *testing.B) {
 	usePacketCache = false
@@ -1140,7 +1127,6 @@ func BenchmarkPacketHandlerCounter(b *testing.B) {
 
 }
 
-
 func BenchmarkPacketHandlerGauge(b *testing.B) {
 	gauges = make(map[string]float64)
 
@@ -1156,7 +1142,6 @@ func BenchmarkPacketHandlerGauge(b *testing.B) {
 		packetHandler(p)
 	}
 }
-
 
 func BenchmarkPacketHandlerTimer(b *testing.B) {
 	timers = make(map[string]Float64Slice)
@@ -1174,7 +1159,6 @@ func BenchmarkPacketHandlerTimer(b *testing.B) {
 	}
 }
 
-
 func BenchmarkPacketHandlerSet(b *testing.B) {
 	sets = make(map[string][]string)
 
@@ -1191,7 +1175,6 @@ func BenchmarkPacketHandlerSet(b *testing.B) {
 	}
 
 }
-
 
 func BenchmarkReadStructChan(b *testing.B) {
 	ch := make(chan struct{}, 1000000)

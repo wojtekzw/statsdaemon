@@ -3,12 +3,12 @@ package main
 import (
 	"fmt"
 	log "github.com/Sirupsen/logrus"
+	"github.com/patrickmn/go-cache"
 	"github.com/shirou/gopsutil/process"
 	"os"
+	"runtime"
 	"sync"
 	"time"
-	"github.com/patrickmn/go-cache"
-	"runtime"
 )
 
 type internalDaemonStat struct {
@@ -90,9 +90,9 @@ func (ds *DaemonStat) String() string {
 	s = s + fmt.Sprintf("OtherErrors: %d errors, ", ds.savedStat.OtherErrors)
 
 	if ds.savedStat.MemGauge != nil {
-		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS) / (1024 * 1024))
-		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS) / (1024 * 1024))
-		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap) / (1024 * 1024))
+		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS)/(1024*1024))
+		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS)/(1024*1024))
+		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap)/(1024*1024))
 	}
 	s = s + fmt.Sprintf("CPUPercent: %.1f%%, ", ds.savedStat.CPUPercent)
 	s = s + fmt.Sprintf("QueueLen: %d, ", ds.savedStat.QueueLen)
@@ -344,7 +344,6 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	}
 	countersMap[nameCacheMiss] += ds.savedStat.NameCacheMiss
 
-
 	// Gauges
 	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.received.rate", extraTagsStr)
 	gaugesMap[pointsRate] = ds.savedStat.PointsReceivedRate
@@ -456,14 +455,14 @@ func normalizeDot(s string, suffixExists bool) string {
 	}
 
 	if suffixExists {
-		if s[len(s) - 1] == byte('.') {
+		if s[len(s)-1] == byte('.') {
 			return s
 		}
 		return s + "."
 	}
 
-	if s[len(s) - 1] == byte('.') {
-		return s[0 : len(s) - 1]
+	if s[len(s)-1] == byte('.') {
+		return s[0 : len(s)-1]
 	}
 	return s
 

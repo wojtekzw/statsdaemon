@@ -3,22 +3,18 @@ package main
 import (
 	"bytes"
 	"fmt"
+	log "github.com/Sirupsen/logrus"
+	"github.com/boltdb/bolt"
 	"math"
 	"reflect"
 	"sort"
-	log "github.com/Sirupsen/logrus"
-	"github.com/boltdb/bolt"
-
 )
-
 
 // packetHandler - process parsed packet and set data in
 // global variables: tags, timers,gauges,counters,sets,keys
 func packetHandler(s *Packet) {
 
-
 	Stat.PointsReceivedInc()
-
 
 	switch s.Modifier {
 	// timer
@@ -30,7 +26,7 @@ func packetHandler(s *Packet) {
 		}
 		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(float64))
 
-// gauge
+		// gauge
 	case "g":
 		gaugeValue, _ := gauges[s.Bucket]
 
@@ -56,7 +52,7 @@ func packetHandler(s *Packet) {
 		}
 
 		gauges[s.Bucket] = gaugeValue
-// counter
+		// counter
 	case "c":
 		_, ok := counters[s.Bucket]
 		if !ok {
@@ -73,8 +69,7 @@ func packetHandler(s *Packet) {
 		}
 		sets[s.Bucket] = append(sets[s.Bucket], s.Value.(string))
 
-
-// key/value
+		// key/value
 	case "kv":
 		_, ok := keys[s.Bucket]
 		if !ok {

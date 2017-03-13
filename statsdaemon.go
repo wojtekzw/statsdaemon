@@ -21,6 +21,7 @@ import (
 	flag "github.com/ogier/pflag"
 	"gopkg.in/yaml.v2"
 	"runtime/pprof"
+	"strings"
 )
 
 // Network constants & dbName
@@ -48,6 +49,7 @@ type ConfigApp struct {
 	TCPServiceAddress string      `yaml:"tcp-addr"`
 	MaxUDPPacketSize  int64       `yaml:"max-udp-packet-size"`
 	BackendType       string      `yaml:"backend-type"`
+	Backends          []string    `yaml:"backends"`
 	PostFlushCmd      string      `yaml:"post-flush-cmd"`
 	GraphiteAddress   string      `yaml:"graphite"`
 	OpenTSDBAddress   string      `yaml:"opentsdb"`
@@ -60,25 +62,25 @@ type ConfigApp struct {
 	StoreDb           string      `yaml:"store-db"`
 	Prefix            string      `yaml:"prefix"`
 	ExtraTags         string      `yaml:"extra-tags"`
-	PercentThreshold  Percentiles `yaml:"percent-threshold"` // `yaml:"percent-threshold,omitempty"`
-	ShowVersion       bool        `yaml:"-"`
-	PrintConfig       bool        `yaml:"-"`
+	PercentThreshold  Percentiles `yaml:"percent-threshold"`
 	LogName           string      `yaml:"log-name"`
 	LogToSyslog       bool        `yaml:"log-to-syslog"`
 	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
 	DisableStatSend   bool        `yaml:"disable-stat-send"`
 	// private - calculated below
-	ExtraTagsHash    map[string]string `yaml:"-"`
-	InternalLogLevel log.Level         `yaml:"-"`
+	ExtraTagsHash      map[string]string `yaml:"-"`
+	InternalLogLevel   log.Level         `yaml:"-"`
+	ParsedPostFlushCmd []string          `yaml:"-"`
 }
 
 // Global vars for command line flags
 var (
-	configFile *string
-	cpuprofile *string
-	Config     = ConfigApp{}
-	ConfigYAML = ConfigApp{}
-	Stat       = DaemonStat{}
+	configFile  *string
+	cpuprofile  *string
+	showVersion *bool
+	printConfig *bool
+	Config      = ConfigApp{}
+	Stat        = DaemonStat{}
 
 	signalchan chan os.Signal // for signal exits
 )
@@ -88,61 +90,35 @@ var (
 func readConfig(parse bool) {
 	var err error
 	// Set defaults
-	ConfigYAML.UDPServiceAddress = defaultUDPServiceAddress
-	ConfigYAML.TCPServiceAddress = defaultTCPServiceAddress
-	ConfigYAML.MaxUDPPacketSize = maxUDPPacket
-	ConfigYAML.BackendType = defaultBackendType
-	ConfigYAML.PostFlushCmd = "stdout"
-	ConfigYAML.GraphiteAddress = defaultGraphiteAddress
-	ConfigYAML.OpenTSDBAddress = defaultOpenTSDBAddress
-	ConfigYAML.FlushInterval = flushInterval
-	ConfigYAML.LogLevel = "error"
-	ConfigYAML.ShowVersion = false
-	ConfigYAML.DeleteGauges = true
-	ConfigYAML.ResetCounters = true
-	ConfigYAML.PersistCountKeys = 0
-	ConfigYAML.StatsPrefix = statsPrefixName
-	ConfigYAML.StoreDb = dbPath
-	ConfigYAML.Prefix = ""
-	ConfigYAML.ExtraTags = ""
-	ConfigYAML.PercentThreshold = Percentiles{}
-	// Percentiles{{Float: 50.0, Str: "50"}, {Float: 80.0, Str: "80"}, {Float: 90.0, Str: "90"}, {Float: 95.0, Str: "95"}}
-	ConfigYAML.PrintConfig = false
-	ConfigYAML.LogName = "stdout"
-	ConfigYAML.LogToSyslog = true
-	ConfigYAML.SyslogUDPAddress = "localhost:514"
-	ConfigYAML.DisableStatSend = false
-
-	Config = ConfigYAML
+	Config.UDPServiceAddress = defaultUDPServiceAddress
+	Config.TCPServiceAddress = defaultTCPServiceAddress
+	Config.MaxUDPPacketSize = maxUDPPacket
+	Config.BackendType = defaultBackendType
+	Config.PostFlushCmd = "stdout"
+	Config.GraphiteAddress = defaultGraphiteAddress
+	Config.OpenTSDBAddress = defaultOpenTSDBAddress
+	Config.FlushInterval = flushInterval
+	Config.LogLevel = "error"
+	Config.DeleteGauges = true
+	Config.ResetCounters = true
+	Config.PersistCountKeys = 0
+	Config.StatsPrefix = statsPrefixName
+	Config.StoreDb = dbPath
+	Config.Prefix = ""
+	Config.ExtraTags = ""
+	Config.PercentThreshold = Percentiles{}
+	Config.LogName = "stdout"
+	Config.LogToSyslog = true
+	Config.SyslogUDPAddress = "localhost:514"
+	Config.DisableStatSend = false
 
 	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
 
 	configFile = flag.String("config", "", "Configuration file name (warning not error if not exists). Standard: "+configPath)
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	showVersion = flag.Bool("version", false, "show program version")
+	printConfig = flag.Bool("print-config", false, "print curent config in yaml (can be used as default config)")
 
-	flag.StringVar(&Config.UDPServiceAddress, "udp-addr", ConfigYAML.UDPServiceAddress, "UDP listen service address")
-	flag.StringVar(&Config.TCPServiceAddress, "tcp-addr", ConfigYAML.TCPServiceAddress, "TCP listen service address, if set")
-	flag.Int64Var(&Config.MaxUDPPacketSize, "max-udp-packet-size", ConfigYAML.MaxUDPPacketSize, "Maximum UDP packet size")
-	flag.StringVar(&Config.BackendType, "backend-type", ConfigYAML.BackendType, "MANDATORY: Backend to use: graphite, opentsdb, external, dummy")
-	flag.StringVar(&Config.PostFlushCmd, "post-flush-cmd", ConfigYAML.PostFlushCmd, "Command to run on each flush")
-	flag.StringVar(&Config.GraphiteAddress, "graphite", ConfigYAML.GraphiteAddress, "Graphite service address")
-	flag.StringVar(&Config.OpenTSDBAddress, "opentsdb", ConfigYAML.OpenTSDBAddress, "OpenTSDB service address")
-	flag.Int64Var(&Config.FlushInterval, "flush-interval", ConfigYAML.FlushInterval, "Flush interval (seconds)")
-	flag.StringVar(&Config.LogLevel, "log-level", ConfigYAML.LogLevel, "Set log level (debug,info,warn,error,fatal)")
-	flag.BoolVar(&Config.ShowVersion, "version", ConfigYAML.ShowVersion, "Print version string")
-	flag.BoolVar(&Config.DeleteGauges, "delete-gauges", ConfigYAML.DeleteGauges, "Don't send values to graphite for inactive gauges, as opposed to sending the previous value")
-	flag.BoolVar(&Config.ResetCounters, "reset-counters", ConfigYAML.ResetCounters, "Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)")
-	flag.Int64Var(&Config.PersistCountKeys, "persist-count-keys", ConfigYAML.PersistCountKeys, "Number of flush-intervals to persist count keys")
-	flag.StringVar(&Config.StatsPrefix, "stats-prefix", ConfigYAML.StatsPrefix, "Name for internal application metrics (no prefix prepended)")
-	flag.StringVar(&Config.StoreDb, "store-db", ConfigYAML.StoreDb, "Name of database for permanent counters storage (for conversion from rate to counter)")
-	flag.StringVar(&Config.Prefix, "prefix", ConfigYAML.Prefix, "Prefix for all stats")
-	flag.StringVar(&Config.ExtraTags, "extra-tags", ConfigYAML.ExtraTags, "Default tags added to all measures in format: tag1=value1 tag2=value2")
-	flag.Var(&Config.PercentThreshold, "percent-threshold", "Percentile calculation for timers (0-100, may be given multiple times)")
-	flag.BoolVar(&Config.PrintConfig, "print-config", ConfigYAML.PrintConfig, "Print config in YAML format")
-	flag.StringVar(&Config.LogName, "log-name", ConfigYAML.LogName, "Name of file to log into. If \"stdout\" than logs to stdout.If empty logs go to /dev/null")
-	flag.BoolVar(&Config.LogToSyslog, "log-to-syslopg", ConfigYAML.LogToSyslog, "Log to syslog")
-	flag.StringVar(&Config.SyslogUDPAddress, "syslog-udp-address", ConfigYAML.SyslogUDPAddress, "Syslog address with port number eg. localhost:514. If empty log to unix socket")
-	flag.BoolVar(&Config.DisableStatSend, "disable-stat-send", ConfigYAML.DisableStatSend, "Disable internal stat send to backendg")
 	if parse {
 		flag.Parse()
 	}
@@ -154,37 +130,12 @@ func readConfig(parse bool) {
 		}
 
 		if len(*configFile) > 0 {
-			err = configor.Load(&ConfigYAML, *configFile)
+			err = configor.Load(&Config, *configFile)
 			if err != nil {
 				fmt.Printf("Error loading config file: %s\n", err)
-			} else {
-				// set configs read form YAML file
-
-				// save 2 flags
-				tmpConfig := Config
-				// Overwites flags
-				Config = ConfigYAML
-				// restore 2 flags
-				Config.ShowVersion = tmpConfig.ShowVersion
-				Config.PrintConfig = tmpConfig.PrintConfig
-
 			}
 		}
 
-		// visitor := func(a *flag.Flag) {
-		// 	fmt.Println(">", a.Name, "value=", a.Value)
-		// 	switch a.Name {
-		// 	case "print-config", "version":
-		// 		break
-		// 	case "udp-addr":
-		// 		ConfigYAML.UDPServiceAddress = a.Value.(string)
-		// 	default:
-		// 		fmt.Printf("Internal Config Error - unknown variable: %s\n", a.Name)
-		// 		os.Exit(1)
-		// 	}
-		//
-		// }
-		// flag.Visit(visitor)
 	}
 
 	// Normalize prefix
@@ -206,6 +157,8 @@ func readConfig(parse bool) {
 		fmt.Printf("Invalid log level: \"%s\"\n", Config.LogLevel)
 		os.Exit(1)
 	}
+
+	Config.ParsedPostFlushCmd = strings.Split(Config.PostFlushCmd, " ")
 
 }
 
@@ -246,12 +199,12 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	if Config.ShowVersion {
+	if *showVersion {
 		fmt.Printf("statsdaemon v%s (built w/%s)\nBuildDate: %s\nGitHash: %s\n", StatsdaemonVersion, runtime.Version(), BuildDate, GitHash)
 		os.Exit(0)
 	}
 
-	if Config.PrintConfig {
+	if *printConfig {
 		out, _ := yaml.Marshal(Config)
 		fmt.Printf("# Default config file in YAML based on config options\n%s", string(out))
 		os.Exit(0)
@@ -324,7 +277,7 @@ func main() {
 
 func validateConfig() error {
 	// FIXME  check all params/flags
-	doNotCheckBackend := Config.PrintConfig || Config.ShowVersion
+	doNotCheckBackend := *printConfig || *showVersion
 	if Config.BackendType == "" && !doNotCheckBackend {
 		return fmt.Errorf("Parameter error: backend-type can't be empty")
 	}

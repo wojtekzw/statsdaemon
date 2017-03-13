@@ -18,7 +18,7 @@ func submit(deadline time.Time, backend string) error {
 	})
 
 	// Prepare internal stats (make a copy, reset current counters)
-	Stat.ProcessStats(packetCache,nameCache)
+	Stat.ProcessStats(packetCache, nameCache)
 
 	if !Config.DisableStatSend {
 		Stat.WriteMetrics(counters, gauges, timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
@@ -49,7 +49,7 @@ func submit(deadline time.Time, backend string) error {
 	switch backend {
 	case "external":
 		if Config.PostFlushCmd != "stdout" {
-			err := sendDataExtCmd(Config.PostFlushCmd, &buffer)
+			err := sendDataExtCmd(Config.ParsedPostFlushCmd, &buffer)
 			if err != nil {
 				logCtx.Errorf("%s", err)
 				Stat.BatchesTransmitFailInc()
