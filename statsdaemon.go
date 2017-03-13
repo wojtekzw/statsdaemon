@@ -25,7 +25,7 @@ import (
 
 // Network constants & dbName
 const (
-	maxUnprocessedPackets = 40000
+	maxUnprocessedPackets = 50000
 
 	tcpReadSize     = 4096
 	maxUDPPacket    = 1432
@@ -364,11 +364,6 @@ func udpListener() {
 	// 	logCtx.WithField("after", "SetReadBuffer").Fatalf("%s", err)
 	// }
 	//
-	// err = listener.SetWriteBuffer(1024 * 1024 * 50)
-	// if err != nil {
-	//
-	// 	logCtx.WithField("after", "SetWriteBuffer").Fatalf("%s", err)
-	// }
 
 	parseTo(listener, false, In)
 }
@@ -419,7 +414,7 @@ func monitor() {
 				Stat.OtherErrorsInc()
 			}
 		case s := <-In:
-			go packetHandler(s)
+			packetHandler(s)
 		}
 	}
 }
