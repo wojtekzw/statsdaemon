@@ -12,7 +12,7 @@ Supports
 --------
 Metrics types:
 * Timers (with optional percentiles)
-* Counters (positive and negative with optional sampling) + ability send counter as rate(default) or absolute counter (using local BoltDB)
+* Counters (positive and negative with optional sampling) + ability send counter as rate(per flush interval - default) or absolute counter (using local BoltDB)
 * Gauges (including relative operations)
 * Sets
 * Key/values (unique untyped)
@@ -23,7 +23,7 @@ Backends supported:
 * Graphite
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
 * OpenTSDB
-* File - enables to send metrics directly to specipied file
+* File - enables to send metrics directly to specified file
 
 Other:
 * Read configuration from YAML file
@@ -40,7 +40,7 @@ It means:
   gauge name: cpu.load.idle
   tags: host = dev, env = prod, zone = west
 ```
-Tags encoding pattern can be changed/enchanced in function `parseBucketAndTags(name string) (string, map[string]string, error)`
+Tags encoding pattern can be changed/enhanced in function `parseBucketAndTags(name string) (string, map[string]string, error)`
 
 
 Installing
