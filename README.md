@@ -23,11 +23,14 @@ Backends supported:
 * Graphite
 * External shell command (data on STDIN) or output to STDOUT (when no external command provided)
 * OpenTSDB
+* File - enables to send metrics directly to specipied file
 
 Other:
 * Read configuration from YAML file
 * Ability to save configuration to YAML file
 * UDP and TCP listeners
+* Internal statistics is sent to datastore - for performance monitoring (can be switched off)
+* Ablility to enable  Golang CPU profiling using command line switch 
 
 ```
 Tag are supported as encoded in bucket name eg:
@@ -38,12 +41,6 @@ It means:
   tags: host = dev, env = prod, zone = west
 ```
 Tags encoding pattern can be changed/enchanced in function `parseBucketAndTags(name string) (string, map[string]string, error)`
-
-Importants bugs:
-* reading config from YAML overwrites config from flags - USE ONLY ONE METHOD NOW !
-  * statsdaemon --config="myconfig.yml" - only config file is OK
-  * statsdaemon --debug=true --backend=external --udp-addr=":8125" - only flags is OK
-  * statsdaemon --config="myconfig.yml" --debug=true - flags & config file is not OK as debug will have default value or from myconfig.yml if exists in config file
 
 
 Installing
@@ -61,27 +58,101 @@ Command Line Options
 
 ```
 Usage of ./statsdaemon:
-      --backend-type="external": MANDATORY: Backend to use: graphite, opentsdb, external, dummy
-      --config="": Configuration file name (warning not error if not exists). Standard: /etc/statsdaemon/statsdaemon.yml
-      --delete-gauges=true: Don't send values to graphite for inactive gauges, as opposed to sending the previous value
-      --extra-tags="": Default tags added to all measures in format: tag1=value1 tag2=value2
-      --flush-interval=10: Flush interval (seconds)
-      --graphite="127.0.0.1:2003": Graphite service address
-      --log-level="error": Set log level (debug,info,warn,error,fatal)
-      --log-name="stdout": Name of file to log into. If "stdout" than logs to stdout.If empty logs go to /dev/null
-      --log-to-syslopg=true: Log to syslog
-      --max-udp-packet-size=1432: Maximum UDP packet size
-      --opentsdb="127.0.0.1:4242": OpenTSDB service address
-      --persist-count-keys=0: Number of flush-intervals to persist count keys
-      --post-flush-cmd="stdout": Command to run on each flush
-      --prefix="": Prefix for all stats
-      --print-config=false: Print config in YAML format
-      --reset-counters=true: Reset counters after sending value to backend (send rate) or  send cumulated value (artificial counter - eg. for OpenTSDB & Grafana)
-      --stats-prefix="statsdaemon": Name for internal application metrics
-      --store-db="/tmp/statsdaemon.db": Name of database for permanent counters storage (for conversion from rate to counter)
-      --syslog-udp-address="localhost:514": Syslog address with port number eg. localhost:514. If empty log to unix socket
-      --tcp-addr="": TCP listen service address, if set
-      --udp-addr=":8125": UDP listen service address
-      --version=false: Print version string
+   --config string
+         Configuration file name (warning not error if not exists). Standard: /etc/statsdaemon/statsdaemon.yml
+   --cpuprofile string
+         write cpu profile to file
+   --print-config
+         print curent config in yaml (can be used as default config)
+   --version
+         show program version
+```
+
+
+YAML config file
+===================
+```
+# Default config file in YAML
+
+#config format version - curently 1 
+cfg-format: 1
+
+# UDP & TCP can be used at the same time
+# UDP listening address and port
+udp-addr: :8125
+
+# TCP listening address and port
+tcp-addr: ""
+
+# maximum size of UDP packet that can be received
+max-udp-packet-size: 1432
+
+# backend types: 
+# - external - send metrics to stdin of command specified on 'post-flush-cmd'
+# - file - send metrics to 'file-name' in 'file-backend'
+# - graphite - send metrics to graphite at address specified in 'graphite'
+# - opentdsb - send metrics to opentdsb at address specified in 'opentdsb'
+# - dummy - do nothing backend
+#
+# backend-type - one of the above backend types
+backend-type: file
+file-backend:
+  file-name: /tmp/statsdaemon_metrics.log
+# command to run (with args) or stdout. Shell redirects like <>| don't work here  
+post-flush-cmd: stdout
+graphite: 127.0.0.1:2003
+opentsdb: 127.0.0.1:4242
+
+# time in seconds to flush agregated metrics to backend
+flush-interval: 10
+
+# log levels: fatal,error,warn,info,debug
+log-level: error
+
+# delete gauge metrics if there is no new data or send last gauge value 
+delete-gauges: true
+
+# reset counter metrics to 0 after each flush or keep them growing using 'store-db' to keep value between restarts 
+reset-counters: true
+
+# number of flush-intervals to persist count keys
+persist-count-keys: 0
+
+# prefix for internal application metrics
+stats-prefix: statsdaemon.
+
+# name of database for permanent counters storage
+store-db: /tmp/statsdaemon.db
+
+# prefix for all stats (except internal application metrics)
+prefix: ""
+
+# default tags added to all measures in format: tag1=value1 tag2=value2
+extra-tags: ""
+
+# timers percentiles eg.:
+#percent-threshold:  
+#- value: 50
+#  name: "50"
+#- value: 80
+#  name: "80"
+#- value: 90
+#  name: "90"
+#- value: 95
+#  name: "95"
+percent-threshold: []
+
+# log destination
+log-name: stdout
+
+# log to syslog (addtionaly to the destination in 'log-name')
+log-to-syslog: true
+
+# syslog udp address or unix socket if empty 
+# syslog-udp-address: localhost:514
+syslog-udp-address: ""
+
+# disable sending internal application stats do backend
+disable-stat-send: false
 
 ```
