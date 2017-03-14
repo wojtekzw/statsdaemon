@@ -1,17 +1,20 @@
 # Default config file in YAML based on config options
+cfg-format: 1
 udp-addr: :8125
 tcp-addr: ""
 max-udp-packet-size: 1472
-backend-type: external
-post-flush-cmd: stdout
+backend-type: file
+file-backend:
+  file-name: "/tmp/a.log"
+post-flush-cmd: cat
 graphite: 127.0.0.1:2003
 opentsdb: 127.0.0.1:4242
-flush-interval: 10
+flush-interval: 1
 log-level: error
 delete-gauges: true
 reset-counters: true
 persist-count-keys: 0
-stats-prefix: statsdaemon
+stats-prefix: "statsdaemon"
 store-db: /tmp/statsdaemon.db
 prefix: ""
 percent-threshold:  
@@ -24,9 +27,11 @@ percent-threshold:
 - value: 95
   name: "95"
 extra-tags: ""
-#log-name: "/tmp/statsdaemon.log"
+log-name: "/tmp/statsdaemon.log"
 log-name: ""
 log-to-syslog: false
 # log to unix socket
 syslog-udp-address: ""
 #syslog-udp-address: localhost:514
+disable-stat-send: false
+
