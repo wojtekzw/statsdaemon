@@ -115,7 +115,7 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	}
 
 	switch backend {
-	case "external", "opentsdb", "dummy":
+	case "external", "file", "opentsdb", "dummy":
 		ret = fmt.Sprintf("%s %s %d%s%s", cleanBucket, val, now, sepTags, normalizeTags(localTags, tfPretty))
 	case "graphite":
 		ret = fmt.Sprintf("%s%s%s%s %s %d", cleanBucket, setFirstGraphite, sepTags, normalizeTags(localTags, tfGraphite), val, now)

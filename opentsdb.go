@@ -13,6 +13,11 @@ import (
 	"github.com/mapmyfitness/go-opentsdb/tsdb"
 )
 
+const (
+	//environment variable SD_OTSDB_MAXMETRICS can be used to change max metrics to OpenTSDB
+	SD_OTSDB_MAXMETRICS = 10
+)
+
 // StructPrettyPrint - JSON like
 func StructPrettyPrint(s interface{}) string {
 	bytesStruct, _ := json.MarshalIndent(s, "", "  ")
@@ -25,8 +30,8 @@ func openTSDB(config ConfigApp, buffer *bytes.Buffer) error {
 		"in": "openTSDB",
 	})
 
-	maxMetrics := 10
-	if i, err := strconv.Atoi(os.Getenv("STATSDAEMON_MAXMETRICS")); err == nil && i > 0 {
+	maxMetrics := SD_OTSDB_MAXMETRICS
+	if i, err := strconv.Atoi(os.Getenv("SD_OTSDB_MAXMETRICS")); err == nil && i > 0 {
 		maxMetrics = i
 	}
 

@@ -25,7 +25,9 @@ import (
 )
 
 // Network constants & dbName
+
 const (
+	defaultCfgFormat      = 1
 	maxUnprocessedPackets = 50000
 
 	tcpReadSize     = 4096
@@ -42,31 +44,41 @@ const (
 	defaultTCPServiceAddress = ""
 
 	defaultBackendType = "external"
+
+	defaultFileBackendFile = ""
 )
 
+type ConfigFileBackend struct {
+	FileName string `yaml:"file-name"`
+	// private below
+	LogFile *os.File `yaml:"-" ignore:"true"`
+}
+
 type ConfigApp struct {
-	UDPServiceAddress string      `yaml:"udp-addr"`
-	TCPServiceAddress string      `yaml:"tcp-addr"`
-	MaxUDPPacketSize  int64       `yaml:"max-udp-packet-size"`
-	BackendType       string      `yaml:"backend-type"`
-	Backends          []string    `yaml:"backends"`
-	PostFlushCmd      string      `yaml:"post-flush-cmd"`
-	GraphiteAddress   string      `yaml:"graphite"`
-	OpenTSDBAddress   string      `yaml:"opentsdb"`
-	FlushInterval     int64       `yaml:"flush-interval"`
-	LogLevel          string      `yaml:"log-level"`
-	DeleteGauges      bool        `yaml:"delete-gauges"`
-	ResetCounters     bool        `yaml:"reset-counters"`
-	PersistCountKeys  int64       `yaml:"persist-count-keys"`
-	StatsPrefix       string      `yaml:"stats-prefix"`
-	StoreDb           string      `yaml:"store-db"`
-	Prefix            string      `yaml:"prefix"`
-	ExtraTags         string      `yaml:"extra-tags"`
-	PercentThreshold  Percentiles `yaml:"percent-threshold"`
-	LogName           string      `yaml:"log-name"`
-	LogToSyslog       bool        `yaml:"log-to-syslog"`
-	SyslogUDPAddress  string      `yaml:"syslog-udp-address"`
-	DisableStatSend   bool        `yaml:"disable-stat-send"`
+	CfgFormat         int    `yaml:"cfg-format"`
+	UDPServiceAddress string `yaml:"udp-addr"`
+	TCPServiceAddress string `yaml:"tcp-addr"`
+	MaxUDPPacketSize  int64  `yaml:"max-udp-packet-size"`
+	BackendType       string `yaml:"backend-type"`
+	//Backends          []string          `yaml:"backends"`
+	CfgFileBackend   ConfigFileBackend `yaml:"file-backend"`
+	PostFlushCmd     string            `yaml:"post-flush-cmd"`
+	GraphiteAddress  string            `yaml:"graphite"`
+	OpenTSDBAddress  string            `yaml:"opentsdb"`
+	FlushInterval    int64             `yaml:"flush-interval"`
+	LogLevel         string            `yaml:"log-level"`
+	DeleteGauges     bool              `yaml:"delete-gauges"`
+	ResetCounters    bool              `yaml:"reset-counters"`
+	PersistCountKeys int64             `yaml:"persist-count-keys"`
+	StatsPrefix      string            `yaml:"stats-prefix"`
+	StoreDb          string            `yaml:"store-db"`
+	Prefix           string            `yaml:"prefix"`
+	ExtraTags        string            `yaml:"extra-tags"`
+	PercentThreshold Percentiles       `yaml:"percent-threshold"`
+	LogName          string            `yaml:"log-name"`
+	LogToSyslog      bool              `yaml:"log-to-syslog"`
+	SyslogUDPAddress string            `yaml:"syslog-udp-address"`
+	DisableStatSend  bool              `yaml:"disable-stat-send"`
 	// private - calculated below
 	ExtraTagsHash      map[string]string `yaml:"-"`
 	InternalLogLevel   log.Level         `yaml:"-"`
@@ -85,11 +97,10 @@ var (
 	signalchan chan os.Signal // for signal exits
 )
 
-//STATSDAEMON_MAXMETRICS == 10 (ev may be used to change max metrics to OpenTSDB)
-
 func readConfig(parse bool) {
 	var err error
 	// Set defaults
+	Config.CfgFormat = defaultCfgFormat
 	Config.UDPServiceAddress = defaultUDPServiceAddress
 	Config.TCPServiceAddress = defaultTCPServiceAddress
 	Config.MaxUDPPacketSize = maxUDPPacket
@@ -109,8 +120,11 @@ func readConfig(parse bool) {
 	Config.PercentThreshold = Percentiles{}
 	Config.LogName = "stdout"
 	Config.LogToSyslog = true
-	Config.SyslogUDPAddress = "localhost:514"
+	Config.SyslogUDPAddress = ""
 	Config.DisableStatSend = false
+
+	// File backend config
+	Config.CfgFileBackend.FileName = defaultFileBackendFile
 
 	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
 
@@ -185,10 +199,13 @@ func main() {
 	err = validateConfig()
 	if err != nil {
 		fmt.Printf("\n%s\n\n", err)
-		flag.Usage()
+		//flag.Usage()
 		os.Exit(1)
 	}
 
+	if Config.CfgFileBackend.LogFile != nil {
+		defer Config.CfgFileBackend.LogFile.Close()
+	}
 	//Profile
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -206,7 +223,7 @@ func main() {
 
 	if *printConfig {
 		out, _ := yaml.Marshal(Config)
-		fmt.Printf("# Default config file in YAML based on config options\n%s", string(out))
+		fmt.Printf("# Default config file in YAML\n%s", string(out))
 		os.Exit(0)
 	}
 
@@ -258,8 +275,9 @@ func main() {
 	signalchan = make(chan os.Signal, 1)
 	signal.Notify(signalchan, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGINT)
 
-	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 1 * time.Second})
+	dbHandle, err = bolt.Open(Config.StoreDb, 0644, &bolt.Options{Timeout: 2 * time.Second})
 	if err != nil {
+		fmt.Printf("Error opening BoldDB: %v\n", err)
 		log.WithFields(log.Fields{
 			"in": "main",
 		}).Fatalf("%s", err)
@@ -281,7 +299,7 @@ func validateConfig() error {
 	if Config.BackendType == "" && !doNotCheckBackend {
 		return fmt.Errorf("Parameter error: backend-type can't be empty")
 	}
-	if Config.BackendType != "external" && Config.BackendType != "graphite" && Config.BackendType != "opentsdb" && Config.BackendType != "dummy" && !doNotCheckBackend {
+	if Config.BackendType != "external" && Config.BackendType != "graphite" && Config.BackendType != "opentsdb" && Config.BackendType != "file" && Config.BackendType != "dummy" && !doNotCheckBackend {
 		return fmt.Errorf("Parameter error: Invalid backend-type: %s", Config.BackendType)
 	}
 
@@ -292,6 +310,18 @@ func validateConfig() error {
 	if (Config.OpenTSDBAddress == "-" || Config.OpenTSDBAddress == "") && Config.BackendType == "opentsdb" {
 		return fmt.Errorf("Parameter error: OpenTSDB backend selected and no OpenTSDB server address")
 	}
+
+	if Config.BackendType == "file" {
+		if len(Config.CfgFileBackend.FileName) == 0 {
+			return fmt.Errorf("Parameter error: File backend selected and no output FileName")
+		}
+		f, err := os.OpenFile(Config.CfgFileBackend.FileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			return fmt.Errorf("Parameter error: Error openning file %s: %s", Config.CfgFileBackend.FileName, err)
+		}
+		Config.CfgFileBackend.LogFile = f
+	}
+
 	return nil
 }
 
@@ -302,13 +332,14 @@ func udpListener() {
 
 	address, err := net.ResolveUDPAddr("udp", Config.UDPServiceAddress)
 	if err != nil {
+		fmt.Printf("Error in ResolveUDPAddr: %v\n", err)
 		logCtx.Fatalf("%s", err)
 	}
 	logCtx.Infof("Listening on %s", address)
 
 	listener, err := net.ListenUDP("udp", address)
 	if err != nil {
-
+		fmt.Printf("Error in ListenUDP: %v\n", err)
 		logCtx.WithField("after", "ListenUDP").Fatalf("%s", err)
 	}
 	// err = listener.SetReadBuffer(1024 * 1024 * 50)
@@ -327,11 +358,13 @@ func tcpListener() {
 	})
 	address, err := net.ResolveTCPAddr("tcp", Config.TCPServiceAddress)
 	if err != nil {
+		fmt.Printf("Error in ResolveTCPAddr: %v\n", err)
 		logCtx.Fatalf("%s", err)
 	}
 	logCtx.Infof("listening on %s", address)
 	listener, err := net.ListenTCP("tcp", address)
 	if err != nil {
+		fmt.Printf("Error in ListenTCP: %v\n", err)
 		logCtx.Fatalf("%s", err)
 	}
 	defer listener.Close()
@@ -339,6 +372,7 @@ func tcpListener() {
 	for {
 		conn, err := listener.AcceptTCP()
 		if err != nil {
+			fmt.Printf("Error in AcceptTCP: %v\n", err)
 			logCtx.Fatalf("%s", err)
 		}
 		go parseTo(conn, true, In)

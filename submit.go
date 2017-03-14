@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"time"
 
+	"fmt"
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -83,11 +84,20 @@ func submit(deadline time.Time, backend string) error {
 			Stat.BatchesTransmittedInc()
 		}
 
+	case "file":
+		if err := sendDataToFile(Config.CfgFileBackend.LogFile, &buffer); err != nil {
+			logCtx.Errorf("%s", err)
+			Stat.BatchesTransmitFailInc()
+		} else {
+			Stat.BatchesTransmittedInc()
+		}
+
 	case "dummy":
 	//	do nothing
 
 	default:
-		logCtx.Fatalf("Invalid backend %s. Exiting...\n", backend)
+		fmt.Printf("Invalid backend `%s`. Exiting...\n", backend)
+		logCtx.Fatalf("Invalid backend `%s`. Exiting...\n", backend)
 	}
 
 	return nil
