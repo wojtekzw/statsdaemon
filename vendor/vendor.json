@@ -33,6 +33,12 @@
 			"revisionTime": "2016-05-16T15:40:46Z"
 		},
 		{
+			"checksumSHA1": "pgFWKMptSJrYHssxkxpyaAxn6v8=",
+			"path": "github.com/coocood/freecache",
+			"revision": "d0d9ceb35b1ceab3a11265b4130e418fd485474d",
+			"revisionTime": "2017-02-05T04:00:19Z"
+		},
+		{
 			"checksumSHA1": "tVfmtFMvfZdKSyw21GtbxBRpC1s=",
 			"path": "github.com/jinzhu/configor",
 			"revision": "fb7a3183cd987802d006408fe3a4a9e1f6002ece",
@@ -61,6 +67,12 @@
 			"path": "github.com/ogier/pflag",
 			"revision": "45c278ab3607870051a2ea9040bb85fcb8557481",
 			"revisionTime": "2016-01-29T22:01:14Z"
+		},
+		{
+			"checksumSHA1": "vNL7xL08iaySNAxSUz+AoXGu3DQ=",
+			"path": "github.com/patrickmn/go-cache",
+			"revision": "1881a9bccb818787f68c52bfba648c6cf34c34fa",
+			"revisionTime": "2016-01-27T17:00:04Z"
 		},
 		{
 			"checksumSHA1": "+So3vr15OfEgqaq0CJ6BBNLpOb0=",
@@ -99,10 +111,28 @@
 			"revisionTime": "2016-05-20T22:39:10Z"
 		},
 		{
+			"checksumSHA1": "bbilAC3Am0MP1lPfSKblFsIvg4Q=",
+			"path": "github.com/spaolacci/murmur3",
+			"revision": "0d12bf811670bf6a1a63828dfbd003eded177fce",
+			"revisionTime": "2015-08-29T17:28:44Z"
+		},
+		{
+			"checksumSHA1": "RkSV5Gaw5Wtt/FpxkBzK8smdddU=",
+			"path": "github.com/wojtekzw/statsd",
+			"revision": "91f91d9b72cb400b43d58ce52304aa1722a25e52",
+			"revisionTime": "2016-09-26T12:41:24Z"
+		},
+		{
 			"checksumSHA1": "aVgPDgwY3/t4J/JOw9H3FVMHqh0=",
 			"path": "golang.org/x/sys/unix",
 			"revision": "c200b10b5d5e122be351b67af224adc6128af5bf",
 			"revisionTime": "2016-10-22T18:22:21Z"
+		},
+		{
+			"checksumSHA1": "MGk7cSnHqiL5soaovzgcJaNH3fc=",
+			"path": "gopkg.in/yaml.v1",
+			"revision": "9f9df34309c04878acc86042b16630b0f696e1de",
+			"revisionTime": "2014-09-24T16:16:07Z"
 		},
 		{
 			"checksumSHA1": "12GqsW8PiRPnezDDy0v4brZrndM=",
