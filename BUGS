@@ -1,1 +1,0 @@
-1. reading config from YAML overwrites config from flags - USE ONLY ONE METHOD NOW !!! 

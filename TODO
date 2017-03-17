@@ -1,11 +1,11 @@
 1. fix bucket and tags association
-2. config in YAML format - DONE
-3. refactor code to depend on Packet not on bytes.Buffer
-4. Fix Percentiles - DONE
-5. Rename project
-6. Build deb package
-7. Refactor error messages
-8. Count different metrics types separately
-9. Enhance test for all new features
-10. Rethink parsing - what should be sanitized automatically and what should be an error.
-    Think about gathering stats even in case name is wrong
+2. refactor code to depend on Packet not on bytes.Buffer
+3. Rename project
+4. Build deb package
+5. Refactor error messages
+6. Enhance test for all new features
+7. Rethink parsing - what should be sanitized automatically and what should be an error. Think about gathering stats even in case name is wrong
+8. Send flush-perdiod as a gauge metric from app to enable rate calculation outside of statsdaemon
+9. Send each counter as .rate addtionally - set in configuration
+10. change config format to v2
+
