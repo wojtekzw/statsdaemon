@@ -1,0 +1,7 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: statsdaemon
+Source: https://github.com/wojtekzw/statsdaemon
+
+Files: *
+Copyright: (c) 2015 GetResponse. All Rights Reserved.
+License: Open / Unlicense

@@ -1,0 +1,18 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+
+export DH_OPTIONS
+
+export DH_GOPKG := github.com/wojtekzw/statsdaemon
+
+export GOOS=linux
+
+export GOARCH=amd64
+
+DEB_VERSION := $(shell dpkg-parsechangelog | egrep '^Version:' | cut -f 2 -d ' ')
+
+override_dh_auto_build:
+	dh_auto_build -- -ldflags "-X main.BuildDate=`date -u '+%Y-%m-%d_%H:%M:%S'` -X main.GitHash=`git rev-parse HEAD` -X main.StatsdaemonVersion=$(DEB_VERSION)"
+
+%:
+	dh $@ --buildsystem=golang --with=golang

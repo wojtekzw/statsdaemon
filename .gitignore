@@ -5,3 +5,8 @@ statsdaemon.iml
 tools/
 ansible/
 builds/
+obj-x86_64-linux-gnu/
+debian/statsdaemon*
+debian/*.log
+debian/debhelper-build-stamp
+*.deb
