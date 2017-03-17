@@ -45,15 +45,15 @@ Tags encoding pattern can be changed/enhanced in function `parseBucketAndTags(na
 
 Installing
 ==========
-### Building from Source
+### Build from source
 ```
 go get github.com/wojtekzw/statsdaemon
 cd statsdaemon
 go build
 ```
 
-Build Debian Linux package using Docker
-=======================================
+### Build Debian Linux package using Docker
+
 ```
 docker build -t go-deb-builder .
 docker run --rm -v "$PWD:/app" go-deb-builder deb-build.sh
