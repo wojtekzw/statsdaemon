@@ -52,6 +52,13 @@ cd statsdaemon
 go build
 ```
 
+Build Debian Linux package using Docker
+=======================================
+```
+docker build -t go-deb-builder .
+docker run --rm -v "$PWD:/app" go-deb-builder deb-build.sh
+```
+
 
 Command Line Options
 ====================
