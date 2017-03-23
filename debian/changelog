@@ -1,3 +1,9 @@
+statsdaemon (0.9.11) RELEASED; urgency=medium
+
+  * New server stats, less CPU used
+
+ -- Wojciech Zwiefka <wzwiefka@getresponse.com> Thu Mar 23 12:54:28 CET 2017
+
 statsdaemon (0.9.10) RELEASED; urgency=medium
 
   * First deb release

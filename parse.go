@@ -297,6 +297,7 @@ func parseLine(line []byte) *Packet {
 			return nil
 		}
 
+		//TODO use makeBucketName ?
 		// bucket is set to a name WITH tags
 		firstDelim := ""
 		if len(tagsFromBucketName) > 0 || len(Config.ExtraTagsHash) > 0 {

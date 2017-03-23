@@ -92,21 +92,31 @@ func TestMakeBucketName(t *testing.T) {
 		mnp string
 		mn  string
 		ets string
+		ats string
 		out string
 	}
 	checks := []testCase{
-		{gp: "", mnp: "", mn: "test", ets: "", out: "test"},
-		{gp: "", mnp: "", mn: "test", ets: "end=koniec", out: "test.^end=koniec"},
-		{gp: "", mnp: "prefixname", mn: "test", ets: "", out: "prefixname.test"},
-		{gp: "", mnp: "prefixname.", mn: "test", ets: "", out: "prefixname.test"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "", out: "global.prefixname.test"},
-		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", out: "global.prefixname.test"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", out: "global.prefixname.test.^end=koniec"},
-		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", out: "global.prefixname.test"},
+		{gp: "", mnp: "", mn: "test", ets: "", ats: "", out: "test"},
+		{gp: "", mnp: "", mn: "test1", ets: "end=koniec", ats: "", out: "test1.^end=koniec"},
+		{gp: "", mnp: "prefixname", mn: "test", ets: "", ats: "",out: "prefixname.test"},
+		{gp: "", mnp: "prefixname.", mn: "test", ets: "", ats: "",out: "prefixname.test"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "", ats: "",out: "global.prefixname.test"},
+		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", ats: "",out: "global.prefixname.test"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", ats: "",out: "global.prefixname.test.^end=koniec"},
+		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", ats: "",out: "global.prefixname.test"},
+
+		{gp: "", mnp: "", mn: "test1", ets: "", ats: "add=lastone", out: "test1.^add=lastone"},
+		{gp: "", mnp: "", mn: "test2", ets: "end=koniec", ats: "add=lastone", out: "test2.^end=koniec.^add=lastone"},
+		{gp: "", mnp: "prefixname", mn: "test", ets: "", ats: "add=lastone",out: "prefixname.test.^add=lastone"},
+		{gp: "", mnp: "prefixname.", mn: "test", ets: "", ats: "add=lastone",out: "prefixname.test.^add=lastone"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "", ats: "add=lastone",out: "global.prefixname.test.^add=lastone"},
+		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", ats: "add=lastone",out: "global.prefixname.test.^add=lastone"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", ats: "add=lastone",out: "global.prefixname.test.^end=koniec.^add=lastone"},
+		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", ats: "add=lastone",out: "global.prefixname.test.^add=lastone"},
 	}
 
 	for _, r := range checks {
-		out := makeBucketName(r.gp, r.mnp, r.mn, r.ets)
+		out := makeBucketName(r.gp, r.mnp, r.mn, r.ets,r.ats)
 		assert.Equal(t, out, r.out)
 	}
 
