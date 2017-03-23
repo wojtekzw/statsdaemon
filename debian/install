@@ -1,0 +1,2 @@
+debian/etc      /
+statsdaemon.yml /etc/statsdaemon/
