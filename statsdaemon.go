@@ -28,7 +28,7 @@ import (
 
 const (
 	defaultCfgFormat      = 1
-	maxUnprocessedPackets = 50000
+	maxUnprocessedPackets = 100000
 
 	tcpReadSize     = 4096
 	maxUDPPacket    = 1432
