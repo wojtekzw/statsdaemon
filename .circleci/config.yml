@@ -22,8 +22,8 @@ jobs:
       - checkout
 
       # specify any bash command here prefixed with `run: `
-      - run: go get -u github.com/kardianos/govendor
-      - run: go get -u github.com/jstemmer/go-junit-report
+      - run: go install -u github.com/kardianos/govendor
+      - run: go install -u github.com/jstemmer/go-junit-report
       - run: mkdir -p $CIRCLE_TEST_REPORTS/go
       - run: govendor test -v +local | go-junit-report >$CIRCLE_TEST_REPORTS/go/junit.xml
 
