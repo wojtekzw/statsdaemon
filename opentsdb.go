@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/mapmyfitness/go-opentsdb/tsdb"
+	"github.com/wojtekzw/go-opentsdb/tsdb"
 )
 
 const (
