@@ -14,14 +14,15 @@ import (
 	"syscall"
 	"time"
 
+	"runtime/pprof"
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
 	"github.com/boltdb/bolt"
 	"github.com/jinzhu/configor"
 	flag "github.com/ogier/pflag"
 	"gopkg.in/yaml.v2"
-	"runtime/pprof"
-	"strings"
 )
 
 // Network constants & dbName
@@ -46,14 +47,26 @@ const (
 	defaultBackendType = "external"
 
 	defaultFileBackendFile = ""
+	defaultDebugMetricFile = ""
 )
 
+// ConfigFileBackend - file backend config.
 type ConfigFileBackend struct {
 	FileName string `yaml:"file-name"`
 	// private below
 	LogFile *os.File `yaml:"-" ignore:"true"`
 }
 
+// ConfigDebugMetrics - debug metrics config.
+type ConfigDebugMetrics struct {
+	Enabled  bool     `yaml:"enabled"`
+	Patterns []string `yaml:"patterns"`
+	FileName string   `yaml:"file-name"`
+	// private below
+	LogFile *os.File `yaml:"-" ignore:"true"`
+}
+
+// ConfigApp - apppliaction config.
 type ConfigApp struct {
 	CfgFormat         int    `yaml:"cfg-format"`
 	UDPServiceAddress string `yaml:"udp-addr"`
@@ -61,24 +74,26 @@ type ConfigApp struct {
 	MaxUDPPacketSize  int64  `yaml:"max-udp-packet-size"`
 	BackendType       string `yaml:"backend-type"`
 	//Backends          []string          `yaml:"backends"`
-	CfgFileBackend   ConfigFileBackend `yaml:"file-backend"`
-	PostFlushCmd     string            `yaml:"post-flush-cmd"`
-	GraphiteAddress  string            `yaml:"graphite"`
-	OpenTSDBAddress  string            `yaml:"opentsdb"`
-	FlushInterval    int64             `yaml:"flush-interval"`
-	LogLevel         string            `yaml:"log-level"`
-	DeleteGauges     bool              `yaml:"delete-gauges"`
-	ResetCounters    bool              `yaml:"reset-counters"`
-	PersistCountKeys int64             `yaml:"persist-count-keys"`
-	StatsPrefix      string            `yaml:"stats-prefix"`
-	StoreDb          string            `yaml:"store-db"`
-	Prefix           string            `yaml:"prefix"`
-	ExtraTags        string            `yaml:"extra-tags"`
-	PercentThreshold Percentiles       `yaml:"percent-threshold"`
-	LogName          string            `yaml:"log-name"`
-	LogToSyslog      bool              `yaml:"log-to-syslog"`
-	SyslogUDPAddress string            `yaml:"syslog-udp-address"`
-	DisableStatSend  bool              `yaml:"disable-stat-send"`
+	CfgFileBackend   ConfigFileBackend  `yaml:"file-backend"`
+	PostFlushCmd     string             `yaml:"post-flush-cmd"`
+	GraphiteAddress  string             `yaml:"graphite"`
+	OpenTSDBAddress  string             `yaml:"opentsdb"`
+	FlushInterval    int64              `yaml:"flush-interval"`
+	LogLevel         string             `yaml:"log-level"`
+	DeleteGauges     bool               `yaml:"delete-gauges"`
+	ResetCounters    bool               `yaml:"reset-counters"`
+	PersistCountKeys int64              `yaml:"persist-count-keys"`
+	StatsPrefix      string             `yaml:"stats-prefix"`
+	StoreDb          string             `yaml:"store-db"`
+	Prefix           string             `yaml:"prefix"`
+	ExtraTags        string             `yaml:"extra-tags"`
+	PercentThreshold Percentiles        `yaml:"percent-threshold"`
+	LogName          string             `yaml:"log-name"`
+	LogToSyslog      bool               `yaml:"log-to-syslog"`
+	SyslogUDPAddress string             `yaml:"syslog-udp-address"`
+	DisableStatSend  bool               `yaml:"disable-stat-send"`
+	CfgDebugMetrics  ConfigDebugMetrics `yaml:"debug-metrics"`
+
 	// private - calculated below
 	ExtraTagsHash      map[string]string `yaml:"-"`
 	InternalLogLevel   log.Level         `yaml:"-"`
@@ -122,6 +137,11 @@ func readConfig(parse bool) {
 	Config.LogToSyslog = true
 	Config.SyslogUDPAddress = ""
 	Config.DisableStatSend = false
+
+	// DebugMetrics
+	Config.CfgDebugMetrics.Enabled = false
+	Config.CfgDebugMetrics.Patterns = []string{}
+	Config.CfgDebugMetrics.FileName = defaultDebugMetricFile
 
 	// File backend config
 	Config.CfgFileBackend.FileName = defaultFileBackendFile
@@ -206,6 +226,11 @@ func main() {
 	if Config.CfgFileBackend.LogFile != nil {
 		defer Config.CfgFileBackend.LogFile.Close()
 	}
+
+	if Config.CfgDebugMetrics.LogFile != nil {
+		defer Config.CfgDebugMetrics.LogFile.Close()
+	}
+
 	//Profile
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
@@ -320,6 +345,17 @@ func validateConfig() error {
 			return fmt.Errorf("Parameter error: Error openning file %s: %s", Config.CfgFileBackend.FileName, err)
 		}
 		Config.CfgFileBackend.LogFile = f
+	}
+
+	if Config.CfgDebugMetrics.Enabled == true {
+		if len(Config.CfgDebugMetrics.FileName) == 0 {
+			return fmt.Errorf("Parameter error: Debug matrics enabled and no output FileName")
+		}
+		f, err := os.OpenFile(Config.CfgDebugMetrics.FileName, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0666)
+		if err != nil {
+			return fmt.Errorf("Parameter error: Error openning file %s: %s", Config.CfgDebugMetrics.FileName, err)
+		}
+		Config.CfgDebugMetrics.LogFile = f
 	}
 
 	return nil

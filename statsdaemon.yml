@@ -9,7 +9,7 @@ file-backend:
 post-flush-cmd: cat
 graphite: 127.0.0.1:2003
 opentsdb: 127.0.0.1:4242
-flush-interval: 1
+flush-interval: 10
 log-level: error
 delete-gauges: true
 reset-counters: true
@@ -28,10 +28,17 @@ percent-threshold:
   name: "95"
 extra-tags: ""
 log-name: "/tmp/statsdaemon.log"
-log-name: ""
+#log-name: ""
 log-to-syslog: false
 # log to unix socket
 syslog-udp-address: ""
 #syslog-udp-address: localhost:514
 disable-stat-send: false
+debug-metrics:
+  enabled: true
+ # patterns are metric prefixes to be debugged 
+  patterns:
+    - "foo"
+    - "home"
+  file-name: "/tmp/statsdaemon-debug.log"
 

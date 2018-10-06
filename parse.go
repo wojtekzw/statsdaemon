@@ -4,19 +4,21 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
+	"time"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/patrickmn/go-cache"
-	"time"
 )
 
 var (
 	nameCache      *cache.Cache
 	packetCache    *cache.Cache
-	usePacketCache bool = true
+	usePacketCache = true
 )
 
 func init() {
@@ -155,6 +157,13 @@ func (mp *MsgParser) lineFrom(input []byte) ([]byte, []byte) {
 }
 
 func parseLine(line []byte) *Packet {
+
+	if Config.CfgDebugMetrics.Enabled {
+		if prefixPresent(string(line), Config.CfgDebugMetrics.Patterns) {
+			fmt.Fprintf(Config.CfgDebugMetrics.LogFile, "%s IN: %s\n", time.Now().Format(time.RFC3339), string(line))
+
+		}
+	}
 
 	var cachedPacket Packet
 	if usePacketCache {

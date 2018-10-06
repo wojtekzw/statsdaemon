@@ -1,7 +1,7 @@
 package main
 
 var (
-	StatsdaemonVersion string = "unknown"
+	StatsdaemonVersion string = "0.9.12"
 	GitHash            string = "empty"
 	BuildDate          string = "empty"
 )

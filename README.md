@@ -30,7 +30,8 @@ Other:
 * Ability to save configuration to YAML file
 * UDP and TCP listeners
 * Internal statistics is sent to datastore - for performance monitoring (can be switched off)
-* Ablility to enable  Golang CPU profiling using command line switch 
+* Ablility to enable  Golang CPU profiling using command line switch
+* Ability to debug single metrics
 
 ```
 Tag are supported as encoded in bucket name eg:
@@ -51,14 +52,6 @@ go get github.com/wojtekzw/statsdaemon
 cd statsdaemon
 go build
 ```
-
-### Build Debian Linux package using Docker
-
-```
-docker build -t go-deb-builder .
-docker run --rm -v "$PWD:/app" go-deb-builder deb-build.sh
-```
-
 
 Command Line Options
 ====================
@@ -161,5 +154,14 @@ syslog-udp-address: ""
 
 # disable sending internal application stats do backend
 disable-stat-send: false
+
+debug-metrics:
+  enabled: false
+# patterns is a list of metrics prefixes to be monitored and send to file  
+#  patterns:
+#      - "foo"
+#      - "cpu"
+  patterns: []
+  file-name: ""
 
 ```

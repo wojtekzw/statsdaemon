@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"fmt"
+
 	log "github.com/Sirupsen/logrus"
 )
 
@@ -37,12 +38,19 @@ func submit(deadline time.Time, backend string) error {
 
 	Stat.PointsTransmittedInc(num)
 
-	if Config.InternalLogLevel >= log.DebugLevel {
+	if Config.InternalLogLevel >= log.DebugLevel || Config.CfgDebugMetrics.Enabled {
 		for _, line := range bytes.Split(buffer.Bytes(), []byte("\n")) {
 			if len(line) == 0 {
 				continue
 			}
-			logCtx.Debugf("Metrics to backend: %s", line)
+			if Config.InternalLogLevel >= log.DebugLevel {
+				logCtx.Debugf("Metrics to backend: %s", line)
+			}
+			if Config.CfgDebugMetrics.Enabled {
+				if prefixPresent(string(line), Config.CfgDebugMetrics.Patterns) {
+					fmt.Fprintf(Config.CfgDebugMetrics.LogFile, "%s OUT: %s\n", time.Now().Format(time.RFC3339), string(line))
+				}
+			}
 		}
 	}
 
