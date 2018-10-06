@@ -24,3 +24,15 @@ jobs:
       # specify any bash command here prefixed with `run: `
       - run: go get -v -t -d ./...
       - run: go test -v ./...
+
+
+
+# circle.yml
+# dependencies:
+#   pre:
+#     - go get -u github.com/kardianos/govendor
+#     - go get -u github.com/jstemmer/go-junit-report
+# test:
+#   override:
+#     - mkdir -p $CIRCLE_TEST_REPORTS/go
+#     - govendor test -v +local | go-junit-report >$CIRCLE_TEST_REPORTS/go/junit.xml
