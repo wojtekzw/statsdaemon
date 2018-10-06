@@ -12,3 +12,4 @@ debian/debhelper-build-stamp
 debian/files
 *.deb
 statsdaemon
+.DS_Store
