@@ -1,185 +1,99 @@
 package configor
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path"
-	"reflect"
 	"regexp"
-	"strings"
-
-	"github.com/BurntSushi/toml"
-
-	"gopkg.in/yaml.v2"
 )
 
-// ENV will return environment
-func ENV() string {
-	if env := os.Getenv("CONFIGOR_ENV"); env != "" {
-		return env
-	}
-	// return test when running go test
-	if isTest, _ := regexp.MatchString("/_test/", os.Args[0]); isTest {
-		return "test"
-	}
-	return "development"
+type Configor struct {
+	*Config
 }
 
-func getConfigurationWithENV(file, env string) (string, error) {
-	var envFile string
-	var extname = path.Ext(file)
+type Config struct {
+	Environment string
+	ENVPrefix   string
+	Debug       bool
+	Verbose     bool
 
-	if extname == "" {
-		envFile = fmt.Sprintf("%v.%v", file, env)
-	} else {
-		envFile = fmt.Sprintf("%v.%v%v", strings.TrimSuffix(file, extname), env, extname)
-	}
-
-	if fileInfo, err := os.Stat(envFile); err == nil && fileInfo.Mode().IsRegular() {
-		return envFile, nil
-	}
-	return "", fmt.Errorf("failed to find file %v", file)
+	// In case of json files, this field will be used only when compiled with
+	// go 1.10 or later.
+	// This field will be ignored when compiled with go versions lower than 1.10.
+	ErrorOnUnmatchedKeys bool
 }
 
-func getConfigurations(files ...string) []string {
-	var results []string
-	env := ENV()
-	for i := len(files) - 1; i >= 0; i-- {
-		var foundFile bool
-		var file = files[i]
-
-		// check configuration
-		if fileInfo, err := os.Stat(file); err == nil && fileInfo.Mode().IsRegular() {
-			foundFile = true
-			results = append(results, file)
-		}
-
-		// check env configuration
-		if file, err := getConfigurationWithENV(file, env); err == nil {
-			foundFile = true
-			results = append(results, file)
-		}
-
-		// check example configuration
-		if !foundFile {
-			if example, err := getConfigurationWithENV(file, "example"); err == nil {
-				fmt.Printf("Failed to find configuration %v, using example file %v\n", file, example)
-				results = append(results, example)
-			} else {
-				fmt.Printf("Failed to find configuration %v\n", file)
-			}
-		}
+// New initialize a Configor
+func New(config *Config) *Configor {
+	if config == nil {
+		config = &Config{}
 	}
-	return results
+
+	if os.Getenv("CONFIGOR_DEBUG_MODE") != "" {
+		config.Debug = true
+	}
+
+	if os.Getenv("CONFIGOR_VERBOSE_MODE") != "" {
+		config.Verbose = true
+	}
+
+	return &Configor{Config: config}
 }
 
-func getPrefix(config interface{}) string {
-	if prefix := os.Getenv("CONFIGOR_ENV_PREFIX"); prefix != "" {
-		return prefix
+var testRegexp = regexp.MustCompile("_test|(\\.test$)")
+
+// GetEnvironment get environment
+func (configor *Configor) GetEnvironment() string {
+	if configor.Environment == "" {
+		if env := os.Getenv("CONFIGOR_ENV"); env != "" {
+			return env
+		}
+
+		if testRegexp.MatchString(os.Args[0]) {
+			return "test"
+		}
+
+		return "development"
 	}
-	return "configor"
+	return configor.Environment
+}
+
+// GetErrorOnUnmatchedKeys returns a boolean indicating if an error should be
+// thrown if there are keys in the config file that do not correspond to the
+// config struct
+func (configor *Configor) GetErrorOnUnmatchedKeys() bool {
+	return configor.ErrorOnUnmatchedKeys
 }
 
 // Load will unmarshal configurations to struct from files that you provide
-func Load(config interface{}, files ...string) error {
-	for _, file := range getConfigurations(files...) {
-		if err := load(config, file); err != nil {
+func (configor *Configor) Load(config interface{}, files ...string) error {
+	defer func() {
+		if configor.Config.Debug || configor.Config.Verbose {
+			fmt.Printf("Configuration:\n  %#v\n", config)
+		}
+	}()
+
+	for _, file := range configor.getConfigurationFiles(files...) {
+		if configor.Config.Debug || configor.Config.Verbose {
+			fmt.Printf("Loading configurations from file '%v'...\n", file)
+		}
+		if err := processFile(config, file, configor.GetErrorOnUnmatchedKeys()); err != nil {
 			return err
 		}
 	}
 
-	if prefix := getPrefix(config); prefix == "-" {
-		return processTags(config)
-	} else {
-		return processTags(config, prefix)
+	prefix := configor.getENVPrefix(config)
+	if prefix == "-" {
+		return configor.processTags(config)
 	}
+	return configor.processTags(config, prefix)
 }
 
-func processTags(config interface{}, prefix ...string) error {
-	configValue := reflect.Indirect(reflect.ValueOf(config))
-	if configValue.Kind() != reflect.Struct {
-		return errors.New("invalid config, should be struct")
-	}
-
-	configType := configValue.Type()
-	for i := 0; i < configType.NumField(); i++ {
-		fieldStruct := configType.Field(i)
-		field := configValue.Field(i)
-
-		// read configuration from shell env
-		var envName = fieldStruct.Tag.Get("env")
-		if envName == "" {
-			envName = strings.ToUpper(strings.Join(append(prefix, fieldStruct.Name), "_"))
-		}
-
-		if envName != "" {
-			if value := os.Getenv(envName); value != "" {
-				if err := yaml.Unmarshal([]byte(value), field.Addr().Interface()); err != nil {
-					return err
-				}
-			}
-		}
-
-		if isBlank := reflect.DeepEqual(field.Interface(), reflect.Zero(field.Type()).Interface()); isBlank {
-			// set default configuration if is blank
-			if value := fieldStruct.Tag.Get("default"); value != "" {
-				if err := yaml.Unmarshal([]byte(value), field.Addr().Interface()); err != nil {
-					return err
-				}
-			} else if fieldStruct.Tag.Get("required") == "true" {
-				// set configuration has value if it is required
-				return errors.New(fieldStruct.Name + " is required, but blank")
-			}
-		}
-
-		for field.Kind() == reflect.Ptr {
-			field = field.Elem()
-		}
-
-		if field.Kind() == reflect.Struct {
-			if err := processTags(field.Addr().Interface(), append(prefix, fieldStruct.Name)...); err != nil {
-				return err
-			}
-		}
-
-		if field.Kind() == reflect.Slice {
-			var length = field.Len()
-			for i := 0; i < length; i++ {
-				if reflect.Indirect(field.Index(i)).Kind() == reflect.Struct {
-					if err := processTags(field.Index(i).Addr().Interface(), append(prefix, fieldStruct.Name, fmt.Sprintf("%d", i))...); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-	return nil
+// ENV return environment
+func ENV() string {
+	return New(nil).GetEnvironment()
 }
 
-func load(config interface{}, file string) error {
-	data, err := ioutil.ReadFile(file)
-	if err != nil {
-		return err
-	}
-
-	switch {
-	case strings.HasSuffix(file, ".yaml") || strings.HasSuffix(file, ".yml"):
-		return yaml.Unmarshal(data, config)
-	case strings.HasSuffix(file, ".toml"):
-		return toml.Unmarshal(data, config)
-	case strings.HasSuffix(file, ".json"):
-		return json.Unmarshal(data, config)
-	default:
-		if toml.Unmarshal(data, config) != nil {
-			if json.Unmarshal(data, config) != nil {
-				if yaml.Unmarshal(data, config) != nil {
-					return errors.New("failed to decode config")
-				}
-			}
-		}
-		return nil
-	}
+// Load will unmarshal configurations to struct from files that you provide
+func Load(config interface{}, files ...string) error {
+	return New(nil).Load(config, files...)
 }

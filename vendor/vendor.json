@@ -57,12 +57,6 @@
 			"revisionTime": "2016-05-04T02:26:26Z"
 		},
 		{
-			"checksumSHA1": "emsHmeZsm9hxlSEuZV6edknODYA=",
-			"path": "github.com/mapmyfitness/go-opentsdb/tsdb",
-			"revision": "bd920af873d332bc2891a8fae9f0472a109d3be7",
-			"revisionTime": "2015-03-18T03:24:43Z"
-		},
-		{
 			"checksumSHA1": "jxORqtJ6VSFi4F45Wg1wxc2aUsc=",
 			"path": "github.com/ogier/pflag",
 			"revision": "45c278ab3607870051a2ea9040bb85fcb8557481",
