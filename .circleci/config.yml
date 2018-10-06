@@ -22,8 +22,13 @@ jobs:
       - checkout
 
       # specify any bash command here prefixed with `run: `
-      - run: go get -v -t -d ./...
-      - run: go test -v ./...
+      - run: go get -u github.com/kardianos/govendor
+      - run: go get -u github.com/jstemmer/go-junit-report
+      - run: mkdir -p $CIRCLE_TEST_REPORTS/go
+      - run: govendor test -v +local | go-junit-report >$CIRCLE_TEST_REPORTS/go/junit.xml
+
+    #  - run: go get -v -t -d ./...
+    #  - run: go test -v ./...
 
 
 
