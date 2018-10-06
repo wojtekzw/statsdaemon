@@ -10,11 +10,11 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/mapmyfitness/go-opentsdb/tsdb"
+	"github.com/wojtekzw/go-opentsdb/tsdb"
 )
 
 const (
-	//environment variable SD_OTSDB_MAXMETRICS can be used to change max metrics to OpenTSDB
+	//SD_OTSDB_MAXMETRICS - environment variable can be used to change max metrics to OpenTSDB
 	SD_OTSDB_MAXMETRICS = 10
 )
 
