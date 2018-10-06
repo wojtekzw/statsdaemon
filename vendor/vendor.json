@@ -23,6 +23,12 @@
 			"revisionTime": "2016-05-24T23:42:29Z"
 		},
 		{
+			"checksumSHA1": "4P5GyZVHYoNlhGV+SiMNpbMwzyM=",
+			"path": "github.com/wojtekzw/go-opentsdb",
+			"revision": "e5ebd0708eebba40014e946380796b05901c4a4c",
+			"revisionTime": "2018-10-06T20:43:03Z"
+		},
+		{
 			"checksumSHA1": "ke+8/E8wR6ITtDBu1cE/ly/rANA=",
 			"path": "github.com/wojtekzw/go-opentsdb/tsdb",
 			"revision": "09e37878feadb8874670f562edf820d0e770c85e",
