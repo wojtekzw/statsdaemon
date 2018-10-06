@@ -1,3 +1,9 @@
+statsdaemon (0.9.15) RELEASED; urgency=medium
+
+  * Ability to debug single metrics
+
+ -- Wojciech Zwiefka <wzwiefka@getresponse.com>  Sat, 6 Oct 2018 22:23:13 CEST
+
 statsdaemon (0.9.12) RELEASED; urgency=medium
 
   * Increased limit for unprocessed packets to 100000
