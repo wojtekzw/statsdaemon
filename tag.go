@@ -200,9 +200,24 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 
 	for _, e := range tagsSlice[1:] {
 		tagAndVal := strings.Split(e, "=")
-		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" {
-			logCtx.Errorf("Format error: Invalid tag format [%s] %v, Removing tag", name, tagsSlice[1:])
-			Stat.PointsParseSoftFailInc()
+
+		// check for tag values of pattern '00077495-0b21-4160-84dd-4110db9273c9' and remove it
+		badPat := false
+		if len(tagAndVal) == 2 && len(tagAndVal[1]) == 36 {
+			sp := strings.Split(tagAndVal[1], "-")
+			if (len(sp) == 5) && (len(sp[4]) == 12) {
+				badPat = true
+			}
+		}
+
+		if len(tagAndVal) != 2 || tagAndVal[0] == "" || tagAndVal[1] == "" || badPat {
+			if badPat {
+				logCtx.Errorf("Format error: Invalid tag value [%s] %v, Removing this tag", tagAndVal[1], tagsSlice[1:])
+				Stat.PointsParseSoftFailInc()
+			} else {
+				logCtx.Errorf("Format error: Invalid tag format [%s] %v, Removing this tag", name, tagsSlice[1:])
+				Stat.PointsParseSoftFailInc()
+			}
 		} else {
 			tags[tagAndVal[0]] = tagAndVal[1]
 		}

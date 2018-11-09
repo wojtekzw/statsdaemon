@@ -1,3 +1,9 @@
+statsdaemon (0.9.16) RELEASED; urgency=medium
+
+  * Remove tags of the pattern "00077495-0b21-4160-84dd-4110db9273c9" from metrics (workaround for logging uuid as tags in metrics)
+
+ -- Wojciech Zwiefka <wzwiefka@getresponse.com>  Sat, 6 Oct 2018 22:23:13 CEST
+
 statsdaemon (0.9.15) RELEASED; urgency=medium
 
   * Ability to debug single metrics
