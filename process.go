@@ -120,6 +120,15 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 	logCtx := log.WithFields(log.Fields{
 		"in": "processCounters",
 	})
+
+	// In "don't reset" mode counters are persisted to Bolt. Accumulate the
+	// updates and write them in a single transaction below instead of one
+	// fsync per counter.
+	var toStore map[string]MeasurePoint
+	if !reset {
+		toStore = make(map[string]MeasurePoint, len(counters))
+	}
+
 	// continue sending zeros for counters for a short period of time even if we have no new data
 	for bucket, value := range counters {
 
@@ -143,14 +152,16 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		countInactivity[bucket] = 0
 
 		if !reset {
-			//  save counter to Bolt
-			err = storeMeasurePoint(dbHandle, bucketName, bucket, nowCounter)
-			if err != nil {
-				logCtx.Errorf("storeMeasurePoint: %s", err)
-				Stat.OtherErrorsInc()
-			}
+			toStore[bucket] = nowCounter
 		}
 		num++
+	}
+
+	if !reset {
+		if err = storeMeasurePoints(dbHandle, bucketName, toStore); err != nil {
+			logCtx.Errorf("storeMeasurePoints: %s", err)
+			Stat.OtherErrorsInc()
+		}
 	}
 
 	for bucket, purgeCount := range countInactivity {

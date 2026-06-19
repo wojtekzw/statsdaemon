@@ -42,6 +42,36 @@ func storeMeasurePoint(db *bolt.DB, bucketName string, name string, mp MeasurePo
 	return nil
 }
 
+// storeMeasurePoints - persists many points in a single transaction.
+// Batching avoids one fsync per counter on the flush path.
+func storeMeasurePoints(db *bolt.DB, bucketName string, points map[string]MeasurePoint) error {
+	if len(points) == 0 {
+		return nil
+	}
+	if len(bucketName) == 0 {
+		return errors.New("bucket name can't be empty")
+	}
+	return db.Update(func(tx *bolt.Tx) error {
+		bucket, err := tx.CreateBucketIfNotExists([]byte(bucketName))
+		if err != nil {
+			return err
+		}
+		for name, mp := range points {
+			if len(name) == 0 {
+				return errors.New("key name can't be empty")
+			}
+			jsonPoint, err := json.Marshal(mp)
+			if err != nil {
+				return err
+			}
+			if err := bucket.Put([]byte(name), jsonPoint); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func readMeasurePoint(db *bolt.DB, bucketName string, name string) (MeasurePoint, error) {
 
 	outMeasurePoint := MeasurePoint{}

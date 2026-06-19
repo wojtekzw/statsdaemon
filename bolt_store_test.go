@@ -57,3 +57,41 @@ func TestStoreAndReadMeasurePoint(t *testing.T) {
 		})
 	}
 }
+
+func TestStoreMeasurePointsBatch(t *testing.T) {
+	boltFile := "/tmp/bolt_batch_test.db"
+	bucketName := "test_batch"
+	_ = os.Remove(boltFile)
+
+	dbHandle, err := bolt.Open(boltFile, 0644, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeAndRemove(dbHandle, boltFile)
+
+	points := map[string]MeasurePoint{
+		"a.counter": {Value: 10, When: 100},
+		"b.counter": {Value: 20, When: 200},
+		"c.counter": {Value: 30, When: 300},
+	}
+
+	if err := storeMeasurePoints(dbHandle, bucketName, points); err != nil {
+		t.Fatalf("storeMeasurePoints() error = %v", err)
+	}
+
+	for name, want := range points {
+		got, err := readMeasurePoint(dbHandle, bucketName, name)
+		if err != nil {
+			t.Errorf("readMeasurePoint(%q) error = %v", name, err)
+			continue
+		}
+		if got != want {
+			t.Errorf("readMeasurePoint(%q) = %v, want %v", name, got, want)
+		}
+	}
+
+	// Empty batch must be a no-op, not an error.
+	if err := storeMeasurePoints(dbHandle, bucketName, nil); err != nil {
+		t.Errorf("storeMeasurePoints(nil) error = %v, want nil", err)
+	}
+}
