@@ -9,8 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func submit(deadline time.Time, backend string) error {
+func submit(mx *metrics, deadline time.Time) error {
 
+	backend := Config.BackendType
 	var buffer bytes.Buffer
 	var num int64
 
@@ -23,18 +24,18 @@ func submit(deadline time.Time, backend string) error {
 	Stat.ProcessStats(packetCache, nameCache)
 
 	if !Config.DisableStatSend {
-		Stat.WriteMetrics(counters, gauges, timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
+		Stat.WriteMetrics(mx.counters, mx.gauges, mx.timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
 	}
 	if Config.InternalLogLevel >= log.DebugLevel {
 		logCtx.Debugf("%s", Stat.String())
 	}
 
 	// Universal format in buffer
-	num += processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
-	num += processGauges(&buffer, now, backend)
-	num += processTimers(&buffer, now, Config.PercentThreshold, backend)
-	num += processSets(&buffer, now, backend)
-	num += processKeyValue(&buffer, now, backend)
+	num += mx.processCounters(&buffer, now, Config.ResetCounters, backend, dbHandle)
+	num += mx.processGauges(&buffer, now, backend)
+	num += mx.processTimers(&buffer, now, Config.PercentThreshold, backend)
+	num += mx.processSets(&buffer, now, backend)
+	num += mx.processKeyValue(&buffer, now, backend)
 
 	Stat.PointsTransmittedInc(num)
 

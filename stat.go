@@ -66,7 +66,7 @@ func (ds *DaemonStat) Init(q chan *Packet, t time.Duration, interval int64) {
 }
 func (ds *DaemonStat) GlobalVarsSizeToString() string {
 	s := fmt.Sprintf("counters: %d, gauges: %d, lastGaugeValue: %d, timers: %d, countInactivity: %d, sets: %d, keys: %d",
-		len(counters), len(gauges), len(lastGaugeValue), len(timers), len(countInactivity), len(sets), len(keys))
+		len(current.counters), len(current.gauges), len(lastGaugeValue), len(current.timers), len(countInactivity), len(current.sets), len(current.keys))
 	return s
 }
 
@@ -177,132 +177,131 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 		return fmt.Errorf("Empty metric name prefix. No saving to backend")
 	}
 
-	versionTag := "statsdaemon="+StatsdaemonVersion
+	versionTag := "statsdaemon=" + StatsdaemonVersion
 	// Counters
-	versionCounter := makeBucketName(globalPrefix, metricNamePrefix, "version.counter", extraTagsStr,versionTag)
+	versionCounter := makeBucketName(globalPrefix, metricNamePrefix, "version.counter", extraTagsStr, versionTag)
 	countersMap[versionCounter] = 1
 
-
-	pointsReceived := makeBucketName(globalPrefix, metricNamePrefix, "point.received", extraTagsStr,versionTag)
+	pointsReceived := makeBucketName(globalPrefix, metricNamePrefix, "point.received", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsReceived]
 	if !ok {
 		countersMap[pointsReceived] = 0
 	}
 	countersMap[pointsReceived] += ds.savedStat.PointsReceived
 
-	pointsParseFail := makeBucketName(globalPrefix, metricNamePrefix, "point.parsefail", extraTagsStr,versionTag)
+	pointsParseFail := makeBucketName(globalPrefix, metricNamePrefix, "point.parsefail", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsParseFail]
 	if !ok {
 		countersMap[pointsParseFail] = 0
 	}
 	countersMap[pointsParseFail] += ds.savedStat.PointsParseFail
 
-	pointsSoftParseFail := makeBucketName(globalPrefix, metricNamePrefix, "point.softparsefail", extraTagsStr,versionTag)
+	pointsSoftParseFail := makeBucketName(globalPrefix, metricNamePrefix, "point.softparsefail", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsSoftParseFail]
 	if !ok {
 		countersMap[pointsSoftParseFail] = 0
 	}
 	countersMap[pointsSoftParseFail] += ds.savedStat.PointsSoftParseFail
 
-	bytesReceived := makeBucketName(globalPrefix, metricNamePrefix, "read.bytes", extraTagsStr,versionTag)
+	bytesReceived := makeBucketName(globalPrefix, metricNamePrefix, "read.bytes", extraTagsStr, versionTag)
 	_, ok = countersMap[bytesReceived]
 	if !ok {
 		countersMap[bytesReceived] = 0
 	}
 	countersMap[bytesReceived] += ds.savedStat.BytesReceived
 
-	readFail := makeBucketName(globalPrefix, metricNamePrefix, "read.fail", extraTagsStr,versionTag)
+	readFail := makeBucketName(globalPrefix, metricNamePrefix, "read.fail", extraTagsStr, versionTag)
 	_, ok = countersMap[readFail]
 	if !ok {
 		countersMap[readFail] = 0
 	}
 	countersMap[readFail] += ds.savedStat.ReadFail
 
-	batchesTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "batch.transmitted", extraTagsStr,versionTag)
+	batchesTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "batch.transmitted", extraTagsStr, versionTag)
 	_, ok = countersMap[batchesTransmitted]
 	if !ok {
 		countersMap[batchesTransmitted] = 0
 	}
 	countersMap[batchesTransmitted] += ds.savedStat.BatchesTransmitted
 
-	batchesTransmitFail := makeBucketName(globalPrefix, metricNamePrefix, "batch.transmitfail", extraTagsStr,versionTag)
+	batchesTransmitFail := makeBucketName(globalPrefix, metricNamePrefix, "batch.transmitfail", extraTagsStr, versionTag)
 	_, ok = countersMap[batchesTransmitFail]
 	if !ok {
 		countersMap[batchesTransmitFail] = 0
 	}
 	countersMap[batchesTransmitFail] += ds.savedStat.BatchesTransmitFail
 
-	pointsTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "point.transmitted", extraTagsStr,versionTag)
+	pointsTransmitted := makeBucketName(globalPrefix, metricNamePrefix, "point.transmitted", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsTransmitted]
 	if !ok {
 		countersMap[pointsTransmitted] = 0
 	}
 	countersMap[pointsTransmitted] += ds.savedStat.PointsTransmitted
 
-	otherErrors := makeBucketName(globalPrefix, metricNamePrefix, "error.other", extraTagsStr,versionTag)
+	otherErrors := makeBucketName(globalPrefix, metricNamePrefix, "error.other", extraTagsStr, versionTag)
 	_, ok = countersMap[otherErrors]
 	if !ok {
 		countersMap[otherErrors] = 0
 	}
 	countersMap[otherErrors] += ds.savedStat.OtherErrors
 
-	pointsReceivedCounter := makeBucketName(globalPrefix, metricNamePrefix, "point.received.counter", extraTagsStr,versionTag)
+	pointsReceivedCounter := makeBucketName(globalPrefix, metricNamePrefix, "point.received.counter", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsReceivedCounter]
 	if !ok {
 		countersMap[pointsReceivedCounter] = 0
 	}
 	countersMap[pointsReceivedCounter] += ds.savedStat.PointsReceivedCounter
 
-	pointsReceivedGauge := makeBucketName(globalPrefix, metricNamePrefix, "point.received.gauge", extraTagsStr,versionTag)
+	pointsReceivedGauge := makeBucketName(globalPrefix, metricNamePrefix, "point.received.gauge", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsReceivedGauge]
 	if !ok {
 		countersMap[pointsReceivedGauge] = 0
 	}
 	countersMap[pointsReceivedGauge] += ds.savedStat.PointsReceivedGauge
 
-	pointsReceivedSet := makeBucketName(globalPrefix, metricNamePrefix, "point.received.set", extraTagsStr,versionTag)
+	pointsReceivedSet := makeBucketName(globalPrefix, metricNamePrefix, "point.received.set", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsReceivedSet]
 	if !ok {
 		countersMap[pointsReceivedSet] = 0
 	}
 	countersMap[pointsReceivedSet] += ds.savedStat.PointsReceivedSet
 
-	pointsReceivedTimer := makeBucketName(globalPrefix, metricNamePrefix, "point.received.timer", extraTagsStr,versionTag)
+	pointsReceivedTimer := makeBucketName(globalPrefix, metricNamePrefix, "point.received.timer", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsReceivedTimer]
 	if !ok {
 		countersMap[pointsReceivedTimer] = 0
 	}
 	countersMap[pointsReceivedTimer] += ds.savedStat.PointsReceivedTimer
 
-	pointsReceivedKeyValue := makeBucketName(globalPrefix, metricNamePrefix, "point.received.keyvalue", extraTagsStr,versionTag)
+	pointsReceivedKeyValue := makeBucketName(globalPrefix, metricNamePrefix, "point.received.keyvalue", extraTagsStr, versionTag)
 	_, ok = countersMap[pointsReceivedKeyValue]
 	if !ok {
 		countersMap[pointsReceivedKeyValue] = 0
 	}
 	countersMap[pointsReceivedKeyValue] += ds.savedStat.PointsReceivedKeyValue
 
-	packetCacheHit := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.hit", extraTagsStr,versionTag)
+	packetCacheHit := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.hit", extraTagsStr, versionTag)
 	_, ok = countersMap[packetCacheHit]
 	if !ok {
 		countersMap[packetCacheHit] = 0
 	}
 	countersMap[packetCacheHit] += ds.savedStat.PacketCacheHit
 
-	packetCacheMiss := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.miss", extraTagsStr,versionTag)
+	packetCacheMiss := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.miss", extraTagsStr, versionTag)
 	_, ok = countersMap[packetCacheMiss]
 	if !ok {
 		countersMap[packetCacheMiss] = 0
 	}
 	countersMap[packetCacheMiss] += ds.savedStat.PacketCacheMiss
 
-	nameCacheHit := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.hit", extraTagsStr,versionTag)
+	nameCacheHit := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.hit", extraTagsStr, versionTag)
 	_, ok = countersMap[nameCacheHit]
 	if !ok {
 		countersMap[nameCacheHit] = 0
 	}
 	countersMap[nameCacheHit] += ds.savedStat.NameCacheHit
 
-	nameCacheMiss := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.miss", extraTagsStr,versionTag)
+	nameCacheMiss := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.miss", extraTagsStr, versionTag)
 	_, ok = countersMap[nameCacheMiss]
 	if !ok {
 		countersMap[nameCacheMiss] = 0
@@ -310,28 +309,28 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	countersMap[nameCacheMiss] += ds.savedStat.NameCacheMiss
 
 	// Gauges
-	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.received.rate", extraTagsStr,versionTag)
+	pointsRate := makeBucketName(globalPrefix, metricNamePrefix, "point.received.rate", extraTagsStr, versionTag)
 	gaugesMap[pointsRate] = ds.savedStat.PointsReceivedRate
 
-	queueLen := makeBucketName(globalPrefix, metricNamePrefix, "queue.len", extraTagsStr,versionTag)
+	queueLen := makeBucketName(globalPrefix, metricNamePrefix, "queue.len", extraTagsStr, versionTag)
 	gaugesMap[queueLen] = float64(ds.savedStat.QueueLen)
 
-	packetCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.size", extraTagsStr,versionTag)
+	packetCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.size", extraTagsStr, versionTag)
 	gaugesMap[packetCacheSize] = float64(ds.savedStat.PacketCacheSize)
 
-	nameCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.size", extraTagsStr,versionTag)
+	nameCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.name.size", extraTagsStr, versionTag)
 	gaugesMap[nameCacheSize] = float64(ds.savedStat.NameCacheSize)
 
-	goroutines := makeBucketName(globalPrefix, metricNamePrefix, "goroutines.number", extraTagsStr,versionTag)
+	goroutines := makeBucketName(globalPrefix, metricNamePrefix, "goroutines.number", extraTagsStr, versionTag)
 	gaugesMap[goroutines] = float64(ds.savedStat.Goroutines)
 
-	memAlloc := makeBucketName(globalPrefix, metricNamePrefix, "memory.alloc", extraTagsStr,versionTag)
+	memAlloc := makeBucketName(globalPrefix, metricNamePrefix, "memory.alloc", extraTagsStr, versionTag)
 	gaugesMap[memAlloc] = float64(ds.savedStat.MemAlloc)
 
-	memSys := makeBucketName(globalPrefix, metricNamePrefix, "memory.sys", extraTagsStr,versionTag)
+	memSys := makeBucketName(globalPrefix, metricNamePrefix, "memory.sys", extraTagsStr, versionTag)
 	gaugesMap[memSys] = float64(ds.savedStat.MemSys)
 
-	memHeapInuse := makeBucketName(globalPrefix, metricNamePrefix, "memory.heapinuse", extraTagsStr,versionTag)
+	memHeapInuse := makeBucketName(globalPrefix, metricNamePrefix, "memory.heapinuse", extraTagsStr, versionTag)
 	gaugesMap[memHeapInuse] = float64(ds.savedStat.MemHeapInuse)
 
 	return nil
@@ -422,7 +421,7 @@ func makeBucketName(globalPrefix string, metricNamePrefix string, metricName str
 		sep2 = "^"
 	}
 
-	return normalizeDot(globalPrefix, true) + normalizeDot(metricNamePrefix, true) + normalizeDot(metricName, len(extraTagsStr) > 0 || len(addTagsStr) > 0 ) +
+	return normalizeDot(globalPrefix, true) + normalizeDot(metricNamePrefix, true) + normalizeDot(metricName, len(extraTagsStr) > 0 || len(addTagsStr) > 0) +
 		sep1 + normalizeDot(extraTagsStr, len(addTagsStr) > 0) + sep2 + normalizeDot(addTagsStr, false)
 }
 

@@ -10,20 +10,40 @@ import (
 	"strconv"
 )
 
-// packetHandler - process parsed packet and set data in
-// global variables: tags, timers,gauges,counters,sets,keys
-func packetHandler(s *Packet) {
+// metrics holds the aggregation maps for one flush interval. A fresh metrics is
+// swapped in by the monitor goroutine at each flush so the previous one can be
+// serialized and sent off the ingestion path (see monitor/flushWorker).
+type metrics struct {
+	counters map[string]int64
+	gauges   map[string]float64
+	timers   map[string]Float64Slice
+	sets     map[string][]string
+	keys     map[string][]string
+}
+
+func newMetrics() *metrics {
+	return &metrics{
+		counters: make(map[string]int64),
+		gauges:   make(map[string]float64),
+		timers:   make(map[string]Float64Slice),
+		sets:     make(map[string][]string),
+		keys:     make(map[string][]string),
+	}
+}
+
+// handlePacket folds a parsed packet into the aggregation maps.
+func (mx *metrics) handlePacket(s *Packet) {
 
 	Stat.PointsReceivedInc()
 
 	switch s.Modifier {
 	// timer
 	case "ms":
-		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(float64))
+		mx.timers[s.Bucket] = append(mx.timers[s.Bucket], s.Value.(float64))
 
 		// gauge
 	case "g":
-		gaugeValue := gauges[s.Bucket]
+		gaugeValue := mx.gauges[s.Bucket]
 
 		gaugeData := s.Value.(GaugeData)
 		if gaugeData.Relative {
@@ -46,18 +66,18 @@ func packetHandler(s *Packet) {
 			gaugeValue = gaugeData.Value
 		}
 
-		gauges[s.Bucket] = gaugeValue
+		mx.gauges[s.Bucket] = gaugeValue
 		// counter
 	case "c":
-		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
+		mx.counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
 
 		// set
 	case "s":
-		sets[s.Bucket] = append(sets[s.Bucket], s.Value.(string))
+		mx.sets[s.Bucket] = append(mx.sets[s.Bucket], s.Value.(string))
 
 		// key/value
 	case "kv":
-		keys[s.Bucket] = append(keys[s.Bucket], s.Value.(string))
+		mx.keys[s.Bucket] = append(mx.keys[s.Bucket], s.Value.(string))
 	}
 
 }
@@ -108,7 +128,7 @@ func formatMetricOutput(bucket string, value any, now int64, backend string) str
 	return ret
 }
 
-func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string, dbHandle *bolt.DB) int64 {
+func (mx *metrics) processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string, dbHandle *bolt.DB) int64 {
 	// Normal behaviour is to reset couners after each send
 	// "don't reset" was added for OpenTSDB and Grafana
 
@@ -126,11 +146,11 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 	// fsync per counter.
 	var toStore map[string]MeasurePoint
 	if !reset {
-		toStore = make(map[string]MeasurePoint, len(counters))
+		toStore = make(map[string]MeasurePoint, len(mx.counters))
 	}
 
 	// continue sending zeros for counters for a short period of time even if we have no new data
-	for bucket, value := range counters {
+	for bucket, value := range mx.counters {
 
 		if !reset {
 			startCounter, err = readMeasurePoint(dbHandle, bucketName, bucket)
@@ -146,7 +166,7 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 		nowCounter.Value = startCounter.Value + value
 		nowCounter.When = now
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, nowCounter.Value, now, backend))
-		delete(counters, bucket)
+		delete(mx.counters, bucket)
 		// delete(tags, bucket)
 
 		countInactivity[bucket] = 0
@@ -192,11 +212,11 @@ func processCounters(buffer *bytes.Buffer, now int64, reset bool, backend string
 	return num
 }
 
-func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
+func (mx *metrics) processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 
 	var num int64
 
-	for bucket, gauge := range gauges {
+	for bucket, gauge := range mx.gauges {
 		// gauge == math.MaxUint64 is the sentinel meaning "no new value this cycle".
 		currentValue := gauge
 		lastValue, hasLastValue := lastGaugeValue[bucket]
@@ -206,7 +226,7 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 		case hasChanged:
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, currentValue, now, backend))
 			lastGaugeValue[bucket] = currentValue
-			gauges[bucket] = math.MaxUint64
+			mx.gauges[bucket] = math.MaxUint64
 			num++
 		case hasLastValue && !Config.DeleteGauges:
 			// Keep republishing the last known value.
@@ -215,17 +235,17 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 		default:
 			// No new value and either delete-gauges mode or nothing to keep:
 			// drop the bucket so gauges/lastGaugeValue do not grow unbounded.
-			delete(gauges, bucket)
+			delete(mx.gauges, bucket)
 			delete(lastGaugeValue, bucket)
 		}
 	}
 	return num
 }
 
-func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
+func (mx *metrics) processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
 
-	num := int64(len(sets))
-	for bucket, set := range sets {
+	num := int64(len(mx.sets))
+	for bucket, set := range mx.sets {
 
 		uniqueSet := map[string]bool{}
 		for _, str := range set {
@@ -233,16 +253,16 @@ func processSets(buffer *bytes.Buffer, now int64, backend string) int64 {
 		}
 
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, len(uniqueSet), now, backend))
-		delete(sets, bucket)
+		delete(mx.sets, bucket)
 		// delete(tags, bucket)
 	}
 	return num
 }
 
-func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
+func (mx *metrics) processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 
-	num := int64(len(keys))
-	for bucket, values := range keys {
+	num := int64(len(mx.keys))
+	for bucket, values := range mx.keys {
 		uniqueKeyVal := map[string]bool{}
 		// For each key in bucket `bucket`, process key, if key already in
 		// uniqueKeyVal map, ignore it and move on, only one unique values
@@ -254,13 +274,13 @@ func processKeyValue(buffer *bytes.Buffer, now int64, backend string) int64 {
 			uniqueKeyVal[value] = true
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, value, now, backend))
 		}
-		delete(keys, bucket)
+		delete(mx.keys, bucket)
 		// delete(tags, bucket)
 	}
 	return num
 }
 
-func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend string) int64 {
+func (mx *metrics) processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend string) int64 {
 
 	// FIXME - chceck float64 conversion
 	var num int64
@@ -268,7 +288,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 	logCtx := log.WithFields(log.Fields{
 		"in": "processTimers",
 	})
-	for bucket, timer := range timers {
+	for bucket, timer := range mx.timers {
 		bucketWithoutPostfix := bucket
 		num++
 
@@ -337,7 +357,7 @@ func processTimers(buffer *bytes.Buffer, now int64, pctls Percentiles, backend s
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.upper%s", cleanBucket, sTags), max, now, backend))
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.lower%s", cleanBucket, sTags), min, now, backend))
 		fmt.Fprintf(buffer, "%s\n", formatMetricOutput(fmt.Sprintf("%s.count%s", cleanBucket, sTags), count, now, backend))
-		delete(timers, bucket)
+		delete(mx.timers, bucket)
 		// delete(localTags, bucket)
 	}
 	return num

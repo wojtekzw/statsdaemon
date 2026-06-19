@@ -587,15 +587,15 @@ func TestPacketHandlerReceiveCounter(t *testing.T) {
 		Modifier: "c",
 		Sampling: float32(1),
 	}
-	packetHandler(p)
+	current.handlePacket(p)
 	assert.Equal(t, Stat.curStat.PointsReceived, int64(1))
 
-	packetHandler(p)
+	current.handlePacket(p)
 	assert.Equal(t, Stat.curStat.PointsReceived, int64(2))
 }
 
 func TestPacketHandlerCount(t *testing.T) {
-	counters = make(map[string]int64)
+	current.counters = make(map[string]int64)
 
 	p := &Packet{
 		Bucket:   "gorets",
@@ -603,24 +603,24 @@ func TestPacketHandlerCount(t *testing.T) {
 		Modifier: "c",
 		Sampling: float32(1),
 	}
-	packetHandler(p)
-	assert.Equal(t, counters["gorets"], int64(100))
+	current.handlePacket(p)
+	assert.Equal(t, current.counters["gorets"], int64(100))
 
 	p.Value = int64(3)
-	packetHandler(p)
-	assert.Equal(t, counters["gorets"], int64(103))
+	current.handlePacket(p)
+	assert.Equal(t, current.counters["gorets"], int64(103))
 
 	p.Value = int64(-4)
-	packetHandler(p)
-	assert.Equal(t, counters["gorets"], int64(99))
+	current.handlePacket(p)
+	assert.Equal(t, current.counters["gorets"], int64(99))
 
 	p.Value = int64(-100)
-	packetHandler(p)
-	assert.Equal(t, counters["gorets"], int64(-1))
+	current.handlePacket(p)
+	assert.Equal(t, current.counters["gorets"], int64(-1))
 }
 
 func TestPacketHandlerGauge(t *testing.T) {
-	gauges = make(map[string]float64)
+	current.gauges = make(map[string]float64)
 
 	p := &Packet{
 		Bucket:   "gaugor",
@@ -628,36 +628,36 @@ func TestPacketHandlerGauge(t *testing.T) {
 		Modifier: "g",
 		Sampling: float32(1),
 	}
-	packetHandler(p)
-	assert.Equal(t, gauges["gaugor"], float64(333))
+	current.handlePacket(p)
+	assert.Equal(t, current.gauges["gaugor"], float64(333))
 
 	// -10
 	p.Value = GaugeData{true, true, 10}
-	packetHandler(p)
-	assert.Equal(t, gauges["gaugor"], float64(323))
+	current.handlePacket(p)
+	assert.Equal(t, current.gauges["gaugor"], float64(323))
 
 	// +4
 	p.Value = GaugeData{true, false, 4}
-	packetHandler(p)
-	assert.Equal(t, gauges["gaugor"], float64(327))
+	current.handlePacket(p)
+	assert.Equal(t, current.gauges["gaugor"], float64(327))
 
 	// <0 overflow
 	p.Value = GaugeData{false, false, 10}
-	packetHandler(p)
+	current.handlePacket(p)
 	p.Value = GaugeData{true, true, 20}
-	packetHandler(p)
-	assert.Equal(t, gauges["gaugor"], float64(0))
+	current.handlePacket(p)
+	assert.Equal(t, current.gauges["gaugor"], float64(0))
 
 	// >2^64 overflow
 	p.Value = GaugeData{false, false, float64(math.MaxFloat64 - 10)}
-	packetHandler(p)
+	current.handlePacket(p)
 	p.Value = GaugeData{true, false, 20}
-	packetHandler(p)
-	assert.Equal(t, gauges["gaugor"], float64(math.MaxFloat64))
+	current.handlePacket(p)
+	assert.Equal(t, current.gauges["gaugor"], float64(math.MaxFloat64))
 }
 
 func TestPacketHandlerTimer(t *testing.T) {
-	timers = make(map[string]Float64Slice)
+	current.timers = make(map[string]Float64Slice)
 
 	p := &Packet{
 		Bucket:   "glork",
@@ -665,18 +665,18 @@ func TestPacketHandlerTimer(t *testing.T) {
 		Modifier: "ms",
 		Sampling: float32(1),
 	}
-	packetHandler(p)
-	assert.Equal(t, len(timers["glork"]), 1)
-	assert.Equal(t, timers["glork"][0], float64(320))
+	current.handlePacket(p)
+	assert.Equal(t, len(current.timers["glork"]), 1)
+	assert.Equal(t, current.timers["glork"][0], float64(320))
 
 	p.Value = float64(100)
-	packetHandler(p)
-	assert.Equal(t, len(timers["glork"]), 2)
-	assert.Equal(t, timers["glork"][1], float64(100))
+	current.handlePacket(p)
+	assert.Equal(t, len(current.timers["glork"]), 2)
+	assert.Equal(t, current.timers["glork"][1], float64(100))
 }
 
 func TestPacketHandlerSet(t *testing.T) {
-	sets = make(map[string][]string)
+	current.sets = make(map[string][]string)
 
 	p := &Packet{
 		Bucket:   "uniques",
@@ -684,24 +684,24 @@ func TestPacketHandlerSet(t *testing.T) {
 		Modifier: "s",
 		Sampling: float32(1),
 	}
-	packetHandler(p)
-	assert.Equal(t, len(sets["uniques"]), 1)
-	assert.Equal(t, sets["uniques"][0], "765")
+	current.handlePacket(p)
+	assert.Equal(t, len(current.sets["uniques"]), 1)
+	assert.Equal(t, current.sets["uniques"][0], "765")
 
 	p.Value = "567"
-	packetHandler(p)
-	assert.Equal(t, len(sets["uniques"]), 2)
-	assert.Equal(t, sets["uniques"][1], "567")
+	current.handlePacket(p)
+	assert.Equal(t, len(current.sets["uniques"]), 2)
+	assert.Equal(t, current.sets["uniques"][1], "567")
 }
 
 func TestProcessCounters(t *testing.T) {
 
 	Config.PersistCountKeys = int64(10)
-	counters = make(map[string]int64)
+	current.counters = make(map[string]int64)
 	var buffer bytes.Buffer
 	now := int64(1418052649)
 
-	counters["gorets"] = int64(123)
+	current.counters["gorets"] = int64(123)
 
 	var err error
 	Config.StoreDb = "/tmp/stats_test.db"
@@ -714,13 +714,13 @@ func TestProcessCounters(t *testing.T) {
 
 	defer closeAndRemove(dbHandle, Config.StoreDb)
 
-	num := processCounters(&buffer, now, true, "external", dbHandle)
+	num := current.processCounters(&buffer, now, true, "external", dbHandle)
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "gorets 123 1418052649\n")
 
-	// run processCounters() enough times to make sure it purges items
+	// run current.processCounters() enough times to make sure it purges items
 	for i := 0; i < int(Config.PersistCountKeys)+10; i++ {
-		num = processCounters(&buffer, now, true, "external", dbHandle)
+		num = current.processCounters(&buffer, now, true, "external", dbHandle)
 	}
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -732,13 +732,13 @@ func TestProcessCounters(t *testing.T) {
 
 func TestProcessTimers(t *testing.T) {
 	// Some data with expected mean of 20
-	timers = make(map[string]Float64Slice)
-	timers["response_time"] = []float64{0, 30, 30}
+	current.timers = make(map[string]Float64Slice)
+	current.timers["response_time"] = []float64{0, 30, 30}
 
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
-	num := processTimers(&buffer, now, Percentiles{}, "external")
+	num := current.processTimers(&buffer, now, Percentiles{}, "external")
 
 	lines := bytes.Split(buffer.Bytes(), []byte("\n"))
 
@@ -748,7 +748,7 @@ func TestProcessTimers(t *testing.T) {
 	assert.Equal(t, string(lines[2]), "response_time.lower 0.000000 1418052649")
 	assert.Equal(t, string(lines[3]), "response_time.count 3 1418052649")
 
-	num = processTimers(&buffer, now, Percentiles{}, "external")
+	num = current.processTimers(&buffer, now, Percentiles{}, "external")
 	assert.Equal(t, num, int64(0))
 }
 
@@ -756,23 +756,23 @@ func TestProcessGauges(t *testing.T) {
 	// Some data with expected mean of 20
 
 	Config.DeleteGauges = false
-	gauges = make(map[string]float64)
-	gauges["gaugor"] = math.MaxUint64
+	current.gauges = make(map[string]float64)
+	current.gauges["gaugor"] = math.MaxUint64
 
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
 
-	num := processGauges(&buffer, now, "external")
+	num := current.processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(0))
 	assert.Equal(t, buffer.String(), "")
 
-	gauges["gaugor"] = 12345
-	num = processGauges(&buffer, now, "external")
+	current.gauges["gaugor"] = 12345
+	num = current.processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 
-	gauges["gaugor"] = math.MaxUint64
-	num = processGauges(&buffer, now, "external")
+	current.gauges["gaugor"] = math.MaxUint64
+	num = current.processGauges(&buffer, now, "external")
 	assert.Equal(t, buffer.String(), "gaugor 12345.000000 1418052649\ngaugor 12345.000000 1418052649\n")
 	assert.Equal(t, num, int64(1))
 }
@@ -780,61 +780,61 @@ func TestProcessGauges(t *testing.T) {
 func TestProcessDeleteGauges(t *testing.T) {
 	// Some data with expected mean of 20
 	Config.DeleteGauges = true
-	gauges = make(map[string]float64)
-	gauges["gaugordelete"] = math.MaxUint64
+	current.gauges = make(map[string]float64)
+	current.gauges["gaugordelete"] = math.MaxUint64
 
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
 
-	num := processGauges(&buffer, now, "external")
+	num := current.processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(0))
 	assert.Equal(t, buffer.String(), "")
 
-	gauges["gaugordelete"] = 12345
-	num = processGauges(&buffer, now, "external")
+	current.gauges["gaugordelete"] = 12345
+	num = current.processGauges(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 
-	gauges["gaugordelete"] = math.MaxUint64
-	num = processGauges(&buffer, now, "external")
+	current.gauges["gaugordelete"] = math.MaxUint64
+	num = current.processGauges(&buffer, now, "external")
 	assert.Equal(t, buffer.String(), "gaugordelete 12345.000000 1418052649\n")
 	assert.Equal(t, num, int64(0))
 }
 
 func TestProcessSets(t *testing.T) {
-	sets = make(map[string][]string)
+	current.sets = make(map[string][]string)
 
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
 
 	// three unique values
-	sets["uniques"] = []string{"123", "234", "345"}
-	num := processSets(&buffer, now, "external")
+	current.sets["uniques"] = []string{"123", "234", "345"}
+	num := current.processSets(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "uniques 3 1418052649\n")
 
 	// one value is repeated
 	buffer.Reset()
-	sets["uniques"] = []string{"123", "234", "234"}
-	num = processSets(&buffer, now, "external")
+	current.sets["uniques"] = []string{"123", "234", "234"}
+	num = current.processSets(&buffer, now, "external")
 	assert.Equal(t, num, int64(1))
 	assert.Equal(t, buffer.String(), "uniques 2 1418052649\n")
 
-	// make sure sets are purged
-	num = processSets(&buffer, now, "external")
+	// make sure current.sets are purged
+	num = current.processSets(&buffer, now, "external")
 	assert.Equal(t, num, int64(0))
 }
 
 func TestProcessTimersUpperPercentile(t *testing.T) {
 	// Some data with expected 75% of 2
-	timers = make(map[string]Float64Slice)
-	timers["response_time"] = []float64{0, 1, 2, 3}
+	current.timers = make(map[string]Float64Slice)
+	current.timers["response_time"] = []float64{0, 1, 2, 3}
 
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
-	num := processTimers(&buffer, now, Percentiles{
+	num := current.processTimers(&buffer, now, Percentiles{
 		Percentile{
 			75,
 			"75",
@@ -848,13 +848,13 @@ func TestProcessTimersUpperPercentile(t *testing.T) {
 }
 
 func TestProcessTimesLowerPercentile(t *testing.T) {
-	timers = make(map[string]Float64Slice)
-	timers["time"] = []float64{0, 1, 2, 3}
+	current.timers = make(map[string]Float64Slice)
+	current.timers["time"] = []float64{0, 1, 2, 3}
 
 	now := int64(1418052649)
 
 	var buffer bytes.Buffer
-	num := processTimers(&buffer, now, Percentiles{
+	num := current.processTimers(&buffer, now, Percentiles{
 		Percentile{
 			-75,
 			"-75",
@@ -927,7 +927,7 @@ func TestMultipleUDPSends(t *testing.T) {
 //		bucket := "response_time" + strconv.Itoa(i)
 //		for i := 0; i < 10000; i++ {
 //			a := float64(r.Uint32() % 1000)
-//			timers[bucket] = append(timers[bucket], a)
+//			current.timers[bucket] = append(current.timers[bucket], a)
 //		}
 //	}
 //
@@ -935,7 +935,7 @@ func TestMultipleUDPSends(t *testing.T) {
 //		bucket := "count" + strconv.Itoa(i)
 //		for i := 0; i < 10000; i++ {
 //			a := int64(r.Uint32() % 1000)
-//			counters[bucket] = a
+//			current.counters[bucket] = a
 //		}
 //	}
 //
@@ -943,7 +943,7 @@ func TestMultipleUDPSends(t *testing.T) {
 //		bucket := "gauge" + strconv.Itoa(i)
 //		for i := 0; i < 10000; i++ {
 //			a := float64(r.Uint32() % 1000)
-//			gauges[bucket] = a
+//			current.gauges[bucket] = a
 //		}
 //	}
 //
@@ -965,9 +965,9 @@ func TestMultipleUDPSends(t *testing.T) {
 //
 //	now := time.Now().Unix()
 //	t.ResetTimer()
-//	processTimers(&buff, now, commonPercentiles, "external")
-//	processCounters(&buff, now, true, "external", dbHandle)
-//	processGauges(&buff, now, "external")
+//	current.processTimers(&buff, now, commonPercentiles, "external")
+//	current.processCounters(&buff, now, true, "external", dbHandle)
+//	current.processGauges(&buff, now, "external")
 //}
 //
 //func BenchmarkOneBigTimer(t *testing.B) {
@@ -975,12 +975,12 @@ func TestMultipleUDPSends(t *testing.T) {
 //	bucket := "response_time"
 //	for i := 0; i < 10000000; i++ {
 //		a := float64(r.Uint32() % 1000)
-//		timers[bucket] = append(timers[bucket], a)
+//		current.timers[bucket] = append(current.timers[bucket], a)
 //	}
 //
 //	var buff bytes.Buffer
 //	t.ResetTimer()
-//	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
+//	current.processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
 //}
 //
 //func BenchmarkLotsOfTimers(t *testing.B) {
@@ -989,13 +989,13 @@ func TestMultipleUDPSends(t *testing.T) {
 //		bucket := "response_time" + strconv.Itoa(i)
 //		for i := 0; i < 10000; i++ {
 //			a := float64(r.Uint32() % 1000)
-//			timers[bucket] = append(timers[bucket], a)
+//			current.timers[bucket] = append(current.timers[bucket], a)
 //		}
 //	}
 //
 //	var buff bytes.Buffer
 //	t.ResetTimer()
-//	processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
+//	current.processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
 //}
 //
 //func BenchmarkOneTimerWith10Points(t *testing.B) {
@@ -1003,14 +1003,14 @@ func TestMultipleUDPSends(t *testing.T) {
 //	bucket := "response_time"
 //	for i := 0; i < 10; i++ {
 //		a := float64(r.Uint32() % 1000)
-//		timers[bucket] = append(timers[bucket], a)
+//		current.timers[bucket] = append(current.timers[bucket], a)
 //	}
 //
 //	var buff bytes.Buffer
 //	t.ResetTimer()
 //
 //	for i := 0; i < t.N; i++ {
-//		processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
+//		current.processTimers(&buff, time.Now().Unix(), commonPercentiles, "external")
 //		buff = bytes.Buffer{}
 //	}
 //
@@ -1023,7 +1023,7 @@ func TestMultipleUDPSends(t *testing.T) {
 //		bucket := "count" + strconv.Itoa(i)
 //		for i := 0; i < 1000; i++ {
 //			a := int64(r.Uint32() % 1000)
-//			counters[bucket] = a
+//			current.counters[bucket] = a
 //		}
 //	}
 //
@@ -1046,7 +1046,7 @@ func TestMultipleUDPSends(t *testing.T) {
 //	t.ResetTimer()
 //
 //	for i := 0; i < t.N; i++ {
-//		processCounters(&buff, time.Now().Unix(), true, "external", dbHandle)
+//		current.processCounters(&buff, time.Now().Unix(), true, "external", dbHandle)
 //		buff = bytes.Buffer{}
 //	}
 //
@@ -1123,7 +1123,7 @@ func BenchmarkParseLineWith1TagErrorAndSyslog(b *testing.B) {
 }
 
 func BenchmarkPacketHandlerCounter(b *testing.B) {
-	counters = make(map[string]int64)
+	current.counters = make(map[string]int64)
 
 	p := &Packet{
 		Bucket:   "gorets",
@@ -1134,13 +1134,13 @@ func BenchmarkPacketHandlerCounter(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		packetHandler(p)
+		current.handlePacket(p)
 	}
 
 }
 
 func BenchmarkPacketHandlerGauge(b *testing.B) {
-	gauges = make(map[string]float64)
+	current.gauges = make(map[string]float64)
 
 	p := &Packet{
 		Bucket:   "gaugor",
@@ -1151,12 +1151,12 @@ func BenchmarkPacketHandlerGauge(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		packetHandler(p)
+		current.handlePacket(p)
 	}
 }
 
 func BenchmarkPacketHandlerTimer(b *testing.B) {
-	timers = make(map[string]Float64Slice)
+	current.timers = make(map[string]Float64Slice)
 
 	p := &Packet{
 		Bucket:   "glork",
@@ -1167,12 +1167,12 @@ func BenchmarkPacketHandlerTimer(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		packetHandler(p)
+		current.handlePacket(p)
 	}
 }
 
 func BenchmarkPacketHandlerSet(b *testing.B) {
-	sets = make(map[string][]string)
+	current.sets = make(map[string][]string)
 
 	p := &Packet{
 		Bucket:   "uniques",
@@ -1183,7 +1183,7 @@ func BenchmarkPacketHandlerSet(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		packetHandler(p)
+		current.handlePacket(p)
 	}
 
 }

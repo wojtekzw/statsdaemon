@@ -53,12 +53,12 @@ func TestFormatMetricOutput(t *testing.T) {
 }
 
 func TestProcessKeyValue(t *testing.T) {
-	keys = make(map[string][]string)
-	keys["kvbucket"] = []string{"v1", "v2", "v1"} // v1 duplicated, must be emitted once
+	current.keys = make(map[string][]string)
+	current.keys["kvbucket"] = []string{"v1", "v2", "v1"} // v1 duplicated, must be emitted once
 	now := int64(1700000000)
 
 	var buf bytes.Buffer
-	num := processKeyValue(&buf, now, "external")
+	num := current.processKeyValue(&buf, now, "external")
 
 	if num != 1 {
 		t.Errorf("processKeyValue num = %d, want 1", num)
@@ -71,29 +71,29 @@ func TestProcessKeyValue(t *testing.T) {
 		t.Errorf("processKeyValue output = %v, want %v (deduplicated)", got, want)
 	}
 
-	if len(keys) != 0 {
-		t.Errorf("processKeyValue did not purge keys: %v", keys)
+	if len(current.keys) != 0 {
+		t.Errorf("processKeyValue did not purge current.keys: %v", current.keys)
 	}
 }
 
 func TestProcessGaugesEviction(t *testing.T) {
 	Config.DeleteGauges = true
-	gauges = make(map[string]float64)
+	current.gauges = make(map[string]float64)
 	lastGaugeValue = make(map[string]float64)
 	now := int64(1700000000)
 
 	var buf bytes.Buffer
-	gauges["g.evict"] = 5
-	processGauges(&buf, now, "external") // emit value, set sentinel + lastGaugeValue
+	current.gauges["g.evict"] = 5
+	current.processGauges(&buf, now, "external") // emit value, set sentinel + lastGaugeValue
 	if _, ok := lastGaugeValue["g.evict"]; !ok {
 		t.Fatal("lastGaugeValue should be set after first cycle")
 	}
 
 	// Second cycle with no new value: delete-gauges mode must evict the bucket
 	// from both maps so they do not grow unbounded.
-	processGauges(&buf, now, "external")
-	if len(gauges) != 0 {
-		t.Errorf("gauges not evicted: %v", gauges)
+	current.processGauges(&buf, now, "external")
+	if len(current.gauges) != 0 {
+		t.Errorf("current.gauges not evicted: %v", current.gauges)
 	}
 	if len(lastGaugeValue) != 0 {
 		t.Errorf("lastGaugeValue not evicted: %v", lastGaugeValue)

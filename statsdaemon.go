@@ -201,16 +201,16 @@ func readConfig(parse bool) error {
 
 // Global var used for all metrics
 var (
-	In             = make(chan *Packet, maxUnprocessedPackets)
-	counters       = make(map[string]int64)
-	gauges         = make(map[string]float64)
-	lastGaugeValue = make(map[string]float64)
-	// lastGaugeTags   = make(map[string]map[string]string)
-	timers          = make(map[string]Float64Slice)
+	In = make(chan *Packet, maxUnprocessedPackets)
+
+	// current holds the accumulation maps for the in-progress flush interval.
+	// It is owned by the monitor goroutine and swapped at each flush.
+	current = newMetrics()
+
+	// Persistent flush-side state, touched only by the flush path.
+	lastGaugeValue  = make(map[string]float64)
 	countInactivity = make(map[string]int64)
-	sets            = make(map[string][]string)
-	keys            = make(map[string][]string)
-	// tags            = make(map[string]map[string]string)
+
 	dbHandle *bolt.DB
 	logFile  io.Writer
 )
@@ -438,18 +438,18 @@ func monitor() {
 		select {
 		case sig := <-signalchan:
 			logCtx.Infof("Caught signal \"%v\"... shutting down", sig)
-			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
+			if err := submit(current, time.Now().Add(period)); err != nil {
 				logCtx.Errorf("%s", err)
 				Stat.OtherErrorsInc()
 			}
 			return
 		case <-ticker.C:
-			if err := submit(time.Now().Add(period), Config.BackendType); err != nil {
+			if err := submit(current, time.Now().Add(period)); err != nil {
 				logCtx.Errorf("%s", err)
 				Stat.OtherErrorsInc()
 			}
 		case s := <-In:
-			packetHandler(s)
+			current.handlePacket(s)
 		}
 	}
 }
