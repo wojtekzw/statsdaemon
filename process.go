@@ -197,30 +197,26 @@ func processGauges(buffer *bytes.Buffer, now int64, backend string) int64 {
 	var num int64
 
 	for bucket, gauge := range gauges {
-		// FIXME MaxUint64 to MAxFloat64 ?????
+		// gauge == math.MaxUint64 is the sentinel meaning "no new value this cycle".
 		currentValue := gauge
 		lastValue, hasLastValue := lastGaugeValue[bucket]
-
-		var hasChanged bool
-
-		if gauge != math.MaxUint64 {
-			hasChanged = true
-		}
+		hasChanged := gauge != math.MaxUint64
 
 		switch {
 		case hasChanged:
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, currentValue, now, backend))
-			// FIXME Memoryleak - never free lastGaugeValue & lastGaugeTags when a lot of unique bucket are used
 			lastGaugeValue[bucket] = currentValue
-			// lastGaugeTags[bucket] = tags[bucket]
 			gauges[bucket] = math.MaxUint64
-			// delete(tags, bucket)
 			num++
-		case hasLastValue && !hasChanged && !Config.DeleteGauges:
+		case hasLastValue && !Config.DeleteGauges:
+			// Keep republishing the last known value.
 			fmt.Fprintf(buffer, "%s\n", formatMetricOutput(bucket, lastValue, now, backend))
 			num++
 		default:
-			continue
+			// No new value and either delete-gauges mode or nothing to keep:
+			// drop the bucket so gauges/lastGaugeValue do not grow unbounded.
+			delete(gauges, bucket)
+			delete(lastGaugeValue, bucket)
 		}
 	}
 	return num

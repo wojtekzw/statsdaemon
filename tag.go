@@ -219,7 +219,16 @@ func parseBucketAndTags(name string) (string, map[string]string, error) {
 				Stat.PointsParseSoftFailInc()
 			}
 		} else {
-			tags[tagAndVal[0]] = tagAndVal[1]
+			// Sanitize key and value so tag content cannot inject delimiters
+			// or control characters into the backend line protocol.
+			key := sanitizeBucket(tagAndVal[0])
+			val := sanitizeBucket(tagAndVal[1])
+			if key == "" || val == "" {
+				logCtx.Errorf("Format error: Tag empty after sanitization [%s], Removing this tag", e)
+				Stat.PointsParseSoftFailInc()
+			} else {
+				tags[key] = val
+			}
 		}
 	}
 	return tagsSlice[0], tags, nil

@@ -56,6 +56,22 @@ func TestAddTags(t *testing.T) {
 	}
 }
 
+func TestParseBucketAndTagsSanitizesValues(t *testing.T) {
+	clean, tags, err := parseBucketAndTags("cpu.^host=web 1.^zone=a,b")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if clean != "cpu" {
+		t.Errorf("clean bucket = %q, want %q", clean, "cpu")
+	}
+	if tags["host"] != "web_1" { // space sanitized to _
+		t.Errorf("tags[host] = %q, want %q", tags["host"], "web_1")
+	}
+	if tags["zone"] != "ab" { // comma (delimiter) dropped
+		t.Errorf("tags[zone] = %q, want %q", tags["zone"], "ab")
+	}
+}
+
 func TestNormalizeTags(t *testing.T) {
 	tags := map[string]string{"host": "web1", "env": "prod"}
 	tests := []struct {
