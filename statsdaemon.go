@@ -427,6 +427,27 @@ func tcpListener() {
 	}
 }
 
+// flushJob carries a swapped-out metrics snapshot to the flush worker.
+type flushJob struct {
+	m        *metrics
+	deadline time.Time
+}
+
+// flushWorker serializes all flushes on a single goroutine so the flush-side
+// state (lastGaugeValue, countInactivity, Bolt) has exactly one accessor, and
+// slow backend I/O never blocks the monitor's packet draining.
+func flushWorker(jobs <-chan flushJob) {
+	logCtx := log.WithFields(log.Fields{
+		"in": "flushWorker",
+	})
+	for job := range jobs {
+		if err := submit(job.m, job.deadline); err != nil {
+			logCtx.Errorf("%s", err)
+			Stat.OtherErrorsInc()
+		}
+	}
+}
+
 func monitor() {
 	logCtx := log.WithFields(log.Fields{
 		"in": "monitor",
@@ -434,20 +455,31 @@ func monitor() {
 
 	period := time.Duration(Config.FlushInterval) * time.Second
 	ticker := time.NewTicker(period)
+
+	// Buffer a few snapshots so a transient slow flush does not stall ingestion;
+	// sustained backend slowness eventually applies backpressure (the buffer
+	// fills, In fills, then the OS drops UDP), which is the desired behaviour.
+	flushJobs := make(chan flushJob, 8)
+	done := make(chan struct{})
+	go func() {
+		flushWorker(flushJobs)
+		close(done)
+	}()
+
 	for {
 		select {
 		case sig := <-signalchan:
 			logCtx.Infof("Caught signal \"%v\"... shutting down", sig)
-			if err := submit(current, time.Now().Add(period)); err != nil {
-				logCtx.Errorf("%s", err)
-				Stat.OtherErrorsInc()
-			}
+			// Hand off the final interval, then drain the worker so we do not
+			// lose buffered snapshots or run a flush concurrently with one.
+			flushJobs <- flushJob{m: current, deadline: time.Now().Add(period)}
+			current = newMetrics()
+			close(flushJobs)
+			<-done
 			return
 		case <-ticker.C:
-			if err := submit(current, time.Now().Add(period)); err != nil {
-				logCtx.Errorf("%s", err)
-				Stat.OtherErrorsInc()
-			}
+			flushJobs <- flushJob{m: current, deadline: time.Now().Add(period)}
+			current = newMetrics()
 		case s := <-In:
 			current.handlePacket(s)
 		}

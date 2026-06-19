@@ -64,13 +64,17 @@ func (ds *DaemonStat) Init(q chan *Packet, t time.Duration, interval int64) {
 	go ds.GoroutinesStats(t)
 
 }
-func (ds *DaemonStat) GlobalVarsSizeToString() string {
+
+// GlobalVarsSizeToString reports map sizes for the metrics snapshot being
+// flushed (mx) plus the flush-side state. It must be called from the flush
+// goroutine only, since mx and the flush-side maps are owned there.
+func (ds *DaemonStat) GlobalVarsSizeToString(mx *metrics) string {
 	s := fmt.Sprintf("counters: %d, gauges: %d, lastGaugeValue: %d, timers: %d, countInactivity: %d, sets: %d, keys: %d",
-		len(current.counters), len(current.gauges), len(lastGaugeValue), len(current.timers), len(countInactivity), len(current.sets), len(current.keys))
+		len(mx.counters), len(mx.gauges), len(lastGaugeValue), len(mx.timers), len(countInactivity), len(mx.sets), len(mx.keys))
 	return s
 }
 
-func (ds *DaemonStat) String() string {
+func (ds *DaemonStat) String(mx *metrics) string {
 	s := fmt.Sprintf("PointsReceived: %d ops, ", ds.savedStat.PointsReceived)
 	s = s + fmt.Sprintf("PointsReceivedRate: %.2f ops/s, ", ds.savedStat.PointsReceivedRate)
 	s = s + fmt.Sprintf("PointsParseFail: %d ops, ", ds.savedStat.PointsParseFail)
@@ -86,12 +90,12 @@ func (ds *DaemonStat) String() string {
 	s = s + fmt.Sprintf("MemSys: %.0f MB, ", float64(ds.savedStat.MemSys)/(1024*1024))
 	s = s + fmt.Sprintf("MemHeapInuse: %.0f MB, ", float64(ds.savedStat.MemHeapInuse)/(1024*1024))
 	s = s + fmt.Sprintf("QueueLen: %d, ", ds.savedStat.QueueLen)
-	s = s + ds.GlobalVarsSizeToString()
+	s = s + ds.GlobalVarsSizeToString(mx)
 	return s
 }
 
-func (ds *DaemonStat) Print() {
-	fmt.Printf("%s", ds.String())
+func (ds *DaemonStat) Print(mx *metrics) {
+	fmt.Printf("%s", ds.String(mx))
 }
 
 func (ds *DaemonStat) PointsReceivedInc() {

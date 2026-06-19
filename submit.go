@@ -27,7 +27,7 @@ func submit(mx *metrics, deadline time.Time) error {
 		Stat.WriteMetrics(mx.counters, mx.gauges, mx.timers, "", Config.StatsPrefix, normalizeTags(Config.ExtraTagsHash, tfDefault))
 	}
 	if Config.InternalLogLevel >= log.DebugLevel {
-		logCtx.Debugf("%s", Stat.String())
+		logCtx.Debugf("%s", Stat.String(mx))
 	}
 
 	// Universal format in buffer
