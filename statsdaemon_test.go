@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"fmt"
+	"github.com/bmizerany/assert"
 	log "github.com/sirupsen/logrus"
 	logrus_syslog "github.com/sirupsen/logrus/hooks/syslog"
-	"github.com/bmizerany/assert"
 	bolt "go.etcd.io/bbolt"
 	"log/syslog"
 )
@@ -25,7 +25,9 @@ var commonPercentiles = Percentiles{
 }
 
 func init() {
-	readConfig(false)
+	if err := readConfig(false); err != nil {
+		log.Fatalf("readConfig: %s", err)
+	}
 	Config.InternalLogLevel = log.FatalLevel
 	// Config.InternalLogLevel = log.ErrorLevel
 	log.SetLevel(Config.InternalLogLevel)
@@ -98,25 +100,25 @@ func TestMakeBucketName(t *testing.T) {
 	checks := []testCase{
 		{gp: "", mnp: "", mn: "test", ets: "", ats: "", out: "test"},
 		{gp: "", mnp: "", mn: "test1", ets: "end=koniec", ats: "", out: "test1.^end=koniec"},
-		{gp: "", mnp: "prefixname", mn: "test", ets: "", ats: "",out: "prefixname.test"},
-		{gp: "", mnp: "prefixname.", mn: "test", ets: "", ats: "",out: "prefixname.test"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "", ats: "",out: "global.prefixname.test"},
-		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", ats: "",out: "global.prefixname.test"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", ats: "",out: "global.prefixname.test.^end=koniec"},
-		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", ats: "",out: "global.prefixname.test"},
+		{gp: "", mnp: "prefixname", mn: "test", ets: "", ats: "", out: "prefixname.test"},
+		{gp: "", mnp: "prefixname.", mn: "test", ets: "", ats: "", out: "prefixname.test"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "", ats: "", out: "global.prefixname.test"},
+		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", ats: "", out: "global.prefixname.test"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", ats: "", out: "global.prefixname.test.^end=koniec"},
+		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", ats: "", out: "global.prefixname.test"},
 
 		{gp: "", mnp: "", mn: "test1", ets: "", ats: "add=lastone", out: "test1.^add=lastone"},
 		{gp: "", mnp: "", mn: "test2", ets: "end=koniec", ats: "add=lastone", out: "test2.^end=koniec.^add=lastone"},
-		{gp: "", mnp: "prefixname", mn: "test", ets: "", ats: "add=lastone",out: "prefixname.test.^add=lastone"},
-		{gp: "", mnp: "prefixname.", mn: "test", ets: "", ats: "add=lastone",out: "prefixname.test.^add=lastone"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "", ats: "add=lastone",out: "global.prefixname.test.^add=lastone"},
-		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", ats: "add=lastone",out: "global.prefixname.test.^add=lastone"},
-		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", ats: "add=lastone",out: "global.prefixname.test.^end=koniec.^add=lastone"},
-		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", ats: "add=lastone",out: "global.prefixname.test.^add=lastone"},
+		{gp: "", mnp: "prefixname", mn: "test", ets: "", ats: "add=lastone", out: "prefixname.test.^add=lastone"},
+		{gp: "", mnp: "prefixname.", mn: "test", ets: "", ats: "add=lastone", out: "prefixname.test.^add=lastone"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "", ats: "add=lastone", out: "global.prefixname.test.^add=lastone"},
+		{gp: "global.", mnp: "prefixname.", mn: "test", ets: "", ats: "add=lastone", out: "global.prefixname.test.^add=lastone"},
+		{gp: "global", mnp: "prefixname", mn: "test", ets: "end=koniec", ats: "add=lastone", out: "global.prefixname.test.^end=koniec.^add=lastone"},
+		{gp: "global.", mnp: "prefixname.", mn: "test.", ets: "", ats: "add=lastone", out: "global.prefixname.test.^add=lastone"},
 	}
 
 	for _, r := range checks {
-		out := makeBucketName(r.gp, r.mnp, r.mn, r.ets,r.ats)
+		out := makeBucketName(r.gp, r.mnp, r.mn, r.ets, r.ats)
 		assert.Equal(t, out, r.out)
 	}
 

@@ -6,6 +6,7 @@ import (
 	"log/syslog"
 
 	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/signal"
@@ -47,6 +48,9 @@ const (
 
 	defaultFileBackendFile = ""
 	defaultDebugMetricFile = ""
+
+	// empty disables the pprof/HTTP debug server
+	defaultPprofAddr = ""
 )
 
 // ConfigFileBackend - file backend config.
@@ -91,6 +95,7 @@ type ConfigApp struct {
 	LogToSyslog      bool               `yaml:"log-to-syslog"`
 	SyslogUDPAddress string             `yaml:"syslog-udp-address"`
 	DisableStatSend  bool               `yaml:"disable-stat-send"`
+	PprofAddr        string             `yaml:"pprof-addr"`
 	CfgDebugMetrics  ConfigDebugMetrics `yaml:"debug-metrics"`
 
 	// private - calculated below
@@ -111,9 +116,8 @@ var (
 	signalchan chan os.Signal // for signal exits
 )
 
-func readConfig(parse bool) {
-	var err error
-	// Set defaults
+// setConfigDefaults populates Config with built-in defaults.
+func setConfigDefaults() {
 	Config.CfgFormat = defaultCfgFormat
 	Config.UDPServiceAddress = defaultUDPServiceAddress
 	Config.TCPServiceAddress = defaultTCPServiceAddress
@@ -136,6 +140,7 @@ func readConfig(parse bool) {
 	Config.LogToSyslog = true
 	Config.SyslogUDPAddress = ""
 	Config.DisableStatSend = false
+	Config.PprofAddr = defaultPprofAddr
 
 	// DebugMetrics
 	Config.CfgDebugMetrics.Enabled = false
@@ -144,55 +149,54 @@ func readConfig(parse bool) {
 
 	// File backend config
 	Config.CfgFileBackend.FileName = defaultFileBackendFile
+}
 
-	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
-
+// registerFlags wires command-line flags to the package-level flag vars.
+func registerFlags() {
 	configFile = flag.String("config", "", "Configuration file name (warning not error if not exists). Standard: "+configPath)
 	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
 	showVersion = flag.Bool("version", false, "show program version")
 	printConfig = flag.Bool("print-config", false, "print curent config in yaml (can be used as default config)")
+}
 
-	if parse {
-		flag.Parse()
+// loadConfig loads the optional config file (a missing/unreadable file is a
+// warning, not an error) and computes derived fields. It returns an error only
+// for invalid configuration values the daemon cannot run with.
+func loadConfig(configFilePath string) error {
+	if len(configFilePath) > 0 {
+		if _, err := os.Stat(configFilePath); os.IsNotExist(err) {
+			fmt.Printf("# Warning: No config file: %s\n", configFilePath)
+		} else if err := configor.Load(&Config, configFilePath); err != nil {
+			fmt.Printf("Error loading config file: %s\n", err)
+		}
 	}
 
-	if len(*configFile) > 0 {
-		if _, err = os.Stat(*configFile); os.IsNotExist(err) {
-			fmt.Printf("# Warning: No config file: %s\n", *configFile)
-			*configFile = ""
-		}
-
-		if len(*configFile) > 0 {
-			err = configor.Load(&Config, *configFile)
-			if err != nil {
-				fmt.Printf("Error loading config file: %s\n", err)
-			}
-		}
-
-	}
-
-	// Normalize prefix
+	// Normalize prefix and internal metrics name
 	Config.Prefix = normalizeDot(Config.Prefix, true)
-
-	// Normalize internal metrics name
 	Config.StatsPrefix = normalizeDot(Config.StatsPrefix, true)
 
-	// calculate extraFlags hash
-	Config.ExtraTagsHash, err = parseExtraTags(Config.ExtraTags)
-	if err != nil {
-		fmt.Printf("Extra Tags: \"%s\" - %s\n", Config.ExtraTags, err)
-		os.Exit(1)
+	var err error
+	if Config.ExtraTagsHash, err = parseExtraTags(Config.ExtraTags); err != nil {
+		return fmt.Errorf("extra tags %q: %s", Config.ExtraTags, err)
 	}
 
-	// Set InternalLogLevel
-	Config.InternalLogLevel, err = log.ParseLevel(Config.LogLevel)
-	if err != nil {
-		fmt.Printf("Invalid log level: \"%s\"\n", Config.LogLevel)
-		os.Exit(1)
+	if Config.InternalLogLevel, err = log.ParseLevel(Config.LogLevel); err != nil {
+		return fmt.Errorf("invalid log level %q", Config.LogLevel)
 	}
 
 	Config.ParsedPostFlushCmd = strings.Split(Config.PostFlushCmd, " ")
+	return nil
+}
 
+// readConfig orchestrates defaults -> flags -> file load -> derived fields.
+func readConfig(parse bool) error {
+	setConfigDefaults()
+	os.Setenv("CONFIGOR_ENV_PREFIX", "SD")
+	registerFlags()
+	if parse {
+		flag.Parse()
+	}
+	return loadConfig(*configFile)
 }
 
 // Global var used for all metrics
@@ -212,15 +216,18 @@ var (
 )
 
 func main() {
-	var err error
+	if err := readConfig(true); err != nil {
+		fmt.Printf("Config error: %s\n", err)
+		os.Exit(1)
+	}
 
-	readConfig(true)
-	err = validateConfig()
-	if err != nil {
+	if err := validateConfig(); err != nil {
 		fmt.Printf("\n%s\n\n", err)
 		//flag.Usage()
 		os.Exit(1)
 	}
+
+	var err error
 
 	if Config.CfgFileBackend.LogFile != nil {
 		defer Config.CfgFileBackend.LogFile.Close()
@@ -287,11 +294,17 @@ func main() {
 		log.SetOutput(io.Discard)
 	}
 
-	// if Config.LogLevel == "debug" {
-	// 	go func() {
-	// 		log.Println(http.ListenAndServe(":8082", nil))
-	// 	}()
-	// }
+	// Optional pprof/HTTP debug server (net/http/pprof registers its handlers
+	// on the default mux via the blank import above).
+	if Config.PprofAddr != "" {
+		go func() {
+			plog := log.WithFields(log.Fields{"in": "pprof"})
+			plog.Infof("Serving pprof/HTTP debug server on %s", Config.PprofAddr)
+			if err := http.ListenAndServe(Config.PprofAddr, nil); err != nil {
+				plog.Errorf("pprof server stopped: %s", err)
+			}
+		}()
+	}
 
 	// Stat
 	Stat.Init(In, 200*time.Millisecond, Config.FlushInterval)
