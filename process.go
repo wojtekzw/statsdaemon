@@ -6,8 +6,8 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/boltdb/bolt"
 	"math"
-	"reflect"
 	"sort"
+	"strconv"
 )
 
 // packetHandler - process parsed packet and set data in
@@ -19,16 +19,11 @@ func packetHandler(s *Packet) {
 	switch s.Modifier {
 	// timer
 	case "ms":
-		_, ok := timers[s.Bucket]
-		if !ok {
-			var t Float64Slice
-			timers[s.Bucket] = t
-		}
 		timers[s.Bucket] = append(timers[s.Bucket], s.Value.(float64))
 
 		// gauge
 	case "g":
-		gaugeValue, _ := gauges[s.Bucket]
+		gaugeValue := gauges[s.Bucket]
 
 		gaugeData := s.Value.(GaugeData)
 		if gaugeData.Relative {
@@ -54,27 +49,14 @@ func packetHandler(s *Packet) {
 		gauges[s.Bucket] = gaugeValue
 		// counter
 	case "c":
-		_, ok := counters[s.Bucket]
-		if !ok {
-			counters[s.Bucket] = 0
-		}
-
 		counters[s.Bucket] += int64(float64(s.Value.(int64)) * float64(1/s.Sampling))
 
 		// set
 	case "s":
-		_, ok := sets[s.Bucket]
-		if !ok {
-			sets[s.Bucket] = make([]string, 0)
-		}
 		sets[s.Bucket] = append(sets[s.Bucket], s.Value.(string))
 
 		// key/value
 	case "kv":
-		_, ok := keys[s.Bucket]
-		if !ok {
-			keys[s.Bucket] = make([]string, 0)
-		}
 		keys[s.Bucket] = append(keys[s.Bucket], s.Value.(string))
 	}
 
@@ -86,16 +68,17 @@ func formatMetricOutput(bucket string, value interface{}, now int64, backend str
 	logCtx := log.WithFields(log.Fields{
 		"in": "formatMetricOutput",
 	})
-	val = ""
-	switch value.(type) {
+	switch v := value.(type) {
 	case string:
-		val = value.(string)
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		val = fmt.Sprintf("%d", value)
-	case float32, float64:
-		val = fmt.Sprintf("%f", value)
+		val = v
+	case int:
+		val = strconv.Itoa(v)
+	case int64:
+		val = strconv.FormatInt(v, 10)
+	case float64:
+		val = strconv.FormatFloat(v, 'f', 6, 64)
 	default:
-		logCtx.Errorf("Invalid type: %v", reflect.TypeOf(value))
+		logCtx.Errorf("Invalid type: %T", value)
 		Stat.OtherErrorsInc()
 	}
 

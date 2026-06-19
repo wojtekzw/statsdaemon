@@ -2,12 +2,9 @@ package main
 
 import (
 	"fmt"
-	log "github.com/Sirupsen/logrus"
 	"github.com/patrickmn/go-cache"
-	"github.com/shirou/gopsutil/process"
-	"os"
 	"runtime"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -27,48 +24,44 @@ type internalDaemonStat struct {
 	PointsReceivedSet      int64
 	PointsReceivedTimer    int64
 	PointsReceivedKeyValue int64
-	MemGauge               *process.MemoryInfoStat
+	MemAlloc               uint64
+	MemSys                 uint64
+	MemHeapInuse           uint64
 	QueueLen               int64
-	CPUPercent             float64
 	PacketCacheHit         int64
 	PacketCacheMiss        int64
 	PacketCacheSize        int64
 	NameCacheHit           int64
 	NameCacheMiss          int64
 	NameCacheSize          int64
-	Goroutines             int
+	Goroutines             int64
 }
 
 type DaemonStat struct {
-	sync.RWMutex
-	*process.Process
 	curStat   internalDaemonStat
 	savedStat internalDaemonStat
 	Interval  int64
+}
+
+// atomicMax - lock-free update of *addr to max(*addr, v).
+func atomicMax(addr *int64, v int64) {
+	for {
+		old := atomic.LoadInt64(addr)
+		if v <= old || atomic.CompareAndSwapInt64(addr, old, v) {
+			return
+		}
+	}
 }
 
 func (ds *DaemonStat) Init(q chan *Packet, t time.Duration, interval int64) {
 	// batch send interval
 	ds.Interval = interval
 
-	ds.Process, _ = process.NewProcess(int32(os.Getpid()))
-	// start counting CPU usage
-	ds.CPUPercent()
-
 	// start background incoming queue len monitoring every t time
 	go ds.QueueStats(q, t)
 
 	// monitor number of goroutines
 	go ds.GoroutinesStats(t)
-
-}
-
-func (ds *DaemonStat) CPUPercent() {
-	cpuPerc, _ := ds.Process.Percent(0)
-	ds.RWMutex.Lock()
-	ds.curStat.CPUPercent = cpuPerc
-	ds.RWMutex.Unlock()
-	log.Errorf("CPUPercent: %.1f%%", ds.curStat.CPUPercent)
 
 }
 func (ds *DaemonStat) GlobalVarsSizeToString() string {
@@ -89,12 +82,9 @@ func (ds *DaemonStat) String() string {
 	s = s + fmt.Sprintf("PointsTransmitted: %d ops, ", ds.savedStat.PointsTransmitted)
 	s = s + fmt.Sprintf("OtherErrors: %d errors, ", ds.savedStat.OtherErrors)
 
-	if ds.savedStat.MemGauge != nil {
-		s = s + fmt.Sprintf("MemRSS: %.0f MB, ", float64(ds.savedStat.MemGauge.RSS)/(1024*1024))
-		s = s + fmt.Sprintf("MemVMS: %.0f MB, ", float64(ds.savedStat.MemGauge.VMS)/(1024*1024))
-		s = s + fmt.Sprintf("MemSwap: %.0f MB, ", float64(ds.savedStat.MemGauge.Swap)/(1024*1024))
-	}
-	s = s + fmt.Sprintf("CPUPercent: %.1f%%, ", ds.savedStat.CPUPercent)
+	s = s + fmt.Sprintf("MemAlloc: %.0f MB, ", float64(ds.savedStat.MemAlloc)/(1024*1024))
+	s = s + fmt.Sprintf("MemSys: %.0f MB, ", float64(ds.savedStat.MemSys)/(1024*1024))
+	s = s + fmt.Sprintf("MemHeapInuse: %.0f MB, ", float64(ds.savedStat.MemHeapInuse)/(1024*1024))
 	s = s + fmt.Sprintf("QueueLen: %d, ", ds.savedStat.QueueLen)
 	s = s + ds.GlobalVarsSizeToString()
 	return s
@@ -105,108 +95,78 @@ func (ds *DaemonStat) Print() {
 }
 
 func (ds *DaemonStat) PointsReceivedInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.PointsReceived++
+	atomic.AddInt64(&ds.curStat.PointsReceived, 1)
 }
 
 func (ds *DaemonStat) OtherErrorsInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.OtherErrors++
-
+	atomic.AddInt64(&ds.curStat.OtherErrors, 1)
 }
 
 func (ds *DaemonStat) BytesReceivedInc(n int64) {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.BytesReceived += n
+	atomic.AddInt64(&ds.curStat.BytesReceived, n)
 }
 
 func (ds *DaemonStat) ReadFailInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.ReadFail++
+	atomic.AddInt64(&ds.curStat.ReadFail, 1)
 }
 
 func (ds *DaemonStat) PointsParseFailInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.PointsParseFail++
+	atomic.AddInt64(&ds.curStat.PointsParseFail, 1)
 }
 
 func (ds *DaemonStat) PointsParseSoftFailInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.PointsSoftParseFail++
+	atomic.AddInt64(&ds.curStat.PointsSoftParseFail, 1)
 }
 
 func (ds *DaemonStat) BatchesTransmittedInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.BatchesTransmitted++
+	atomic.AddInt64(&ds.curStat.BatchesTransmitted, 1)
 }
 
 func (ds *DaemonStat) BatchesTransmitFailInc() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.BatchesTransmitFail++
+	atomic.AddInt64(&ds.curStat.BatchesTransmitFail, 1)
 }
 
 func (ds *DaemonStat) PointsTransmittedInc(n int64) {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.PointsTransmitted += n
+	atomic.AddInt64(&ds.curStat.PointsTransmitted, n)
 }
 
 func (ds *DaemonStat) PointTypeInc(p *Packet) {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-
 	switch p.Modifier {
 	case "c":
-		ds.curStat.PointsReceivedCounter++
+		atomic.AddInt64(&ds.curStat.PointsReceivedCounter, 1)
 	case "g":
-		ds.curStat.PointsReceivedGauge++
+		atomic.AddInt64(&ds.curStat.PointsReceivedGauge, 1)
 	case "s":
-		ds.curStat.PointsReceivedSet++
+		atomic.AddInt64(&ds.curStat.PointsReceivedSet, 1)
 	case "ms":
-		ds.curStat.PointsReceivedTimer++
+		atomic.AddInt64(&ds.curStat.PointsReceivedTimer, 1)
 	case "kv":
-		ds.curStat.PointsReceivedKeyValue++
+		atomic.AddInt64(&ds.curStat.PointsReceivedKeyValue, 1)
 	}
 }
 
 func (ds *DaemonStat) PacketCacheHit() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.PacketCacheHit++
+	atomic.AddInt64(&ds.curStat.PacketCacheHit, 1)
 }
 
 func (ds *DaemonStat) PacketCacheMiss() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.PacketCacheMiss++
+	atomic.AddInt64(&ds.curStat.PacketCacheMiss, 1)
 }
 
 func (ds *DaemonStat) PacketCacheSize(c *cache.Cache) {
-	ds.curStat.PacketCacheSize = int64(c.ItemCount())
+	atomic.StoreInt64(&ds.curStat.PacketCacheSize, int64(c.ItemCount()))
 }
 
 func (ds *DaemonStat) NameCacheHit() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.NameCacheHit++
+	atomic.AddInt64(&ds.curStat.NameCacheHit, 1)
 }
 
 func (ds *DaemonStat) NameCacheMiss() {
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
-	ds.curStat.NameCacheMiss++
+	atomic.AddInt64(&ds.curStat.NameCacheMiss, 1)
 }
 
 func (ds *DaemonStat) NameCacheSize(c *cache.Cache) {
-	ds.curStat.NameCacheSize = int64(c.ItemCount())
+	atomic.StoreInt64(&ds.curStat.NameCacheSize, int64(c.ItemCount()))
 }
 
 func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[string]float64, timersMap map[string]Float64Slice, globalPrefix string, metricNamePrefix string, extraTagsStr string) error {
@@ -356,9 +316,6 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	queueLen := makeBucketName(globalPrefix, metricNamePrefix, "queue.len", extraTagsStr,versionTag)
 	gaugesMap[queueLen] = float64(ds.savedStat.QueueLen)
 
-	cpuPercent := makeBucketName(globalPrefix, metricNamePrefix, "cpu.percent", extraTagsStr,versionTag)
-	gaugesMap[cpuPercent] = float64(ds.savedStat.CPUPercent)
-
 	packetCacheSize := makeBucketName(globalPrefix, metricNamePrefix, "cache.packet.size", extraTagsStr,versionTag)
 	gaugesMap[packetCacheSize] = float64(ds.savedStat.PacketCacheSize)
 
@@ -368,16 +325,14 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 	goroutines := makeBucketName(globalPrefix, metricNamePrefix, "goroutines.number", extraTagsStr,versionTag)
 	gaugesMap[goroutines] = float64(ds.savedStat.Goroutines)
 
-	if ds.savedStat.MemGauge != nil {
-		memRSS := makeBucketName(globalPrefix, metricNamePrefix, "memory.rss", extraTagsStr,versionTag)
-		gaugesMap[memRSS] = float64(ds.savedStat.MemGauge.RSS)
+	memAlloc := makeBucketName(globalPrefix, metricNamePrefix, "memory.alloc", extraTagsStr,versionTag)
+	gaugesMap[memAlloc] = float64(ds.savedStat.MemAlloc)
 
-		memVMS := makeBucketName(globalPrefix, metricNamePrefix, "memory.vms", extraTagsStr,versionTag)
-		gaugesMap[memVMS] = float64(ds.savedStat.MemGauge.VMS)
+	memSys := makeBucketName(globalPrefix, metricNamePrefix, "memory.sys", extraTagsStr,versionTag)
+	gaugesMap[memSys] = float64(ds.savedStat.MemSys)
 
-		memSwap := makeBucketName(globalPrefix, metricNamePrefix, "memory.swap", extraTagsStr,versionTag)
-		gaugesMap[memSwap] = float64(ds.savedStat.MemGauge.Swap)
-	}
+	memHeapInuse := makeBucketName(globalPrefix, metricNamePrefix, "memory.heapinuse", extraTagsStr,versionTag)
+	gaugesMap[memHeapInuse] = float64(ds.savedStat.MemHeapInuse)
 
 	return nil
 
@@ -387,16 +342,8 @@ func (ds *DaemonStat) WriteMetrics(countersMap map[string]int64, gaugesMap map[s
 func (ds *DaemonStat) QueueStats(c chan *Packet, t time.Duration) {
 
 	for {
-		l := int64(len(c))
-
-		ds.RWMutex.Lock()
-		if l > ds.curStat.QueueLen {
-			ds.curStat.QueueLen = l
-		}
-		ds.RWMutex.Unlock()
-
+		atomicMax(&ds.curStat.QueueLen, int64(len(c)))
 		time.Sleep(t)
-
 	}
 
 }
@@ -405,38 +352,56 @@ func (ds *DaemonStat) QueueStats(c chan *Packet, t time.Duration) {
 func (ds *DaemonStat) GoroutinesStats(t time.Duration) {
 
 	for {
-		n := runtime.NumGoroutine()
-
-		ds.RWMutex.Lock()
-		if n > ds.curStat.Goroutines {
-			ds.curStat.Goroutines = n
-		}
-		ds.RWMutex.Unlock()
-
+		atomicMax(&ds.curStat.Goroutines, int64(runtime.NumGoroutine()))
 		time.Sleep(t)
-
 	}
 
 }
 
+// swapCounter - atomically reads a per-interval counter and resets it to 0.
+func swapCounter(addr *int64) int64 {
+	return atomic.SwapInt64(addr, 0)
+}
+
 func (ds *DaemonStat) ProcessStats(packetCache, nameCache *cache.Cache) {
 
-	memInfo, _ := ds.Process.MemoryInfo()
-	cpuPercent, _ := ds.Process.Percent(0)
-	nameSize := int64(nameCache.ItemCount())
-	packetSize := int64(packetCache.ItemCount())
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
 
-	ds.RWMutex.Lock()
-	defer ds.RWMutex.Unlock()
+	// Atomically snapshot and reset all per-interval counters. Each counter is
+	// updated lock-free from the listener/monitor goroutines, so we read-and-reset
+	// them with atomic swaps instead of guarding the whole struct with a mutex.
+	cur := &ds.curStat
+	saved := &ds.savedStat
 
-	ds.curStat.MemGauge = memInfo
-	ds.curStat.CPUPercent = cpuPercent
-	ds.curStat.NameCacheSize = nameSize
-	ds.curStat.PacketCacheSize = packetSize
-	ds.curStat.PointsReceivedRate = float64(ds.curStat.PointsReceived) / float64(ds.Interval)
+	saved.PointsReceived = swapCounter(&cur.PointsReceived)
+	saved.PointsParseFail = swapCounter(&cur.PointsParseFail)
+	saved.PointsSoftParseFail = swapCounter(&cur.PointsSoftParseFail)
+	saved.BytesReceived = swapCounter(&cur.BytesReceived)
+	saved.ReadFail = swapCounter(&cur.ReadFail)
+	saved.BatchesTransmitted = swapCounter(&cur.BatchesTransmitted)
+	saved.BatchesTransmitFail = swapCounter(&cur.BatchesTransmitFail)
+	saved.PointsTransmitted = swapCounter(&cur.PointsTransmitted)
+	saved.OtherErrors = swapCounter(&cur.OtherErrors)
+	saved.PointsReceivedCounter = swapCounter(&cur.PointsReceivedCounter)
+	saved.PointsReceivedGauge = swapCounter(&cur.PointsReceivedGauge)
+	saved.PointsReceivedSet = swapCounter(&cur.PointsReceivedSet)
+	saved.PointsReceivedTimer = swapCounter(&cur.PointsReceivedTimer)
+	saved.PointsReceivedKeyValue = swapCounter(&cur.PointsReceivedKeyValue)
+	saved.PacketCacheHit = swapCounter(&cur.PacketCacheHit)
+	saved.PacketCacheMiss = swapCounter(&cur.PacketCacheMiss)
+	saved.NameCacheHit = swapCounter(&cur.NameCacheHit)
+	saved.NameCacheMiss = swapCounter(&cur.NameCacheMiss)
+	saved.QueueLen = swapCounter(&cur.QueueLen)
+	saved.Goroutines = swapCounter(&cur.Goroutines)
 
-	ds.savedStat = ds.curStat
-	ds.curStat = internalDaemonStat{}
+	// Gauges - sampled here, in this goroutine only.
+	saved.MemAlloc = memStats.Alloc
+	saved.MemSys = memStats.Sys
+	saved.MemHeapInuse = memStats.HeapInuse
+	saved.NameCacheSize = int64(nameCache.ItemCount())
+	saved.PacketCacheSize = int64(packetCache.ItemCount())
+	saved.PointsReceivedRate = float64(saved.PointsReceived) / float64(ds.Interval)
 
 }
 
