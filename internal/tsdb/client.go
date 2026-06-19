@@ -40,7 +40,7 @@ func (t *TSDB) Query(req Request) (*Response, error) {
 	reqReader := bytes.NewReader(reqJSON)
 	respHTTP, err := http.Post(APIURL, "application/json", reqReader)
 	if err != nil {
-		panic(err)
+		return &Response{}, err
 	}
 
 	respJSON, err := io.ReadAll(respHTTP.Body)

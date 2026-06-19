@@ -42,7 +42,7 @@ func (t *Time) UnmarshalJSON(inJSON []byte) error {
 	var raw interface{}
 	err := json.Unmarshal(inJSON, &raw)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	switch raw.(type) {
@@ -107,13 +107,16 @@ Valid formats are:
 	yyyy/MM/dd HH:mm
 	yyyy/MM/dd
 */
+// Time-format patterns are compiled once; constant patterns cannot fail at
+// runtime, so MustCompile (panicking only at init on a bad pattern) is safe.
+var (
+	absoluteTimeRe = regexp.MustCompile(`^\d{4}\/\d{1,2}\/\d{1,2}`)
+	relativeTimeRe = regexp.MustCompile(`^\d+[smhdwmny]\-ago`)
+	unixTimeRe     = regexp.MustCompile(`^\d{10}|^\d{13}`)
+)
+
 func isAbsoluteTime(timeIn string) bool {
-	pattern := `^\d{4}\/\d{1,2}\/\d{1,2}`
-	match, err := regexp.MatchString(pattern, timeIn)
-	if err != nil {
-		panic(err)
-	}
-	return match
+	return absoluteTimeRe.MatchString(timeIn)
 }
 
 /*
@@ -124,12 +127,7 @@ Valid formats are:
 	[0-9]*{s,m,h,d,w,n,y}-ago
 */
 func isRelativeTime(timeIn string) bool {
-	pattern := `^\d+[smhdwmny]\-ago`
-	match, err := regexp.MatchString(pattern, timeIn)
-	if err != nil {
-		panic(err)
-	}
-	return match
+	return relativeTimeRe.MatchString(timeIn)
 }
 
 /*
@@ -141,12 +139,7 @@ Valid formats are:
 	13-digit optional millisecond precision
 */
 func isUnixTime(timeIn string) bool {
-	pattern := `^\d{10}|^\d{13}`
-	match, err := regexp.MatchString(pattern, timeIn)
-	if err != nil {
-		panic(err)
-	}
-	return match
+	return unixTimeRe.MatchString(timeIn)
 }
 
 // fromAbsoluteTime parses the provided timeIn string and if possible
