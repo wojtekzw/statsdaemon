@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log/syslog"
 
 	"net"
@@ -17,11 +16,11 @@ import (
 	"runtime/pprof"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
-	logrus_syslog "github.com/Sirupsen/logrus/hooks/syslog"
-	"github.com/boltdb/bolt"
 	"github.com/jinzhu/configor"
-	flag "github.com/ogier/pflag"
+	log "github.com/sirupsen/logrus"
+	logrus_syslog "github.com/sirupsen/logrus/hooks/syslog"
+	flag "github.com/spf13/pflag"
+	bolt "go.etcd.io/bbolt"
 	"gopkg.in/yaml.v2"
 )
 
@@ -285,7 +284,7 @@ func main() {
 	}
 
 	if Config.LogName == "" {
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	}
 
 	// if Config.LogLevel == "debug" {

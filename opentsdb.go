@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
-	"github.com/wojtekzw/go-opentsdb/tsdb"
+	log "github.com/sirupsen/logrus"
+	"github.com/wojtekzw/statsdaemon/internal/tsdb"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 )
 
 // StructPrettyPrint - JSON like
-func StructPrettyPrint(s interface{}) string {
+func StructPrettyPrint(s any) string {
 	bytesStruct, _ := json.MarshalIndent(s, "", "  ")
 	return string(bytesStruct)
 }

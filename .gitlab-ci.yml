@@ -1,69 +1,43 @@
 # See docs/examples here:
 # http://doc.gitlab.com/ce/ci/quick_start/README.html
 # http://doc.gitlab.com/ce/ci/yaml/README.html
+#
+# Go modules build (no GOPATH gymnastics needed).
 stages:
   - build
   - test
   - bench
 
-image: golang:1.9
+image: golang:1.24
 
-variables:
-  PREFIX: "github.com/wojtekzw/"
-  WORKSPACE: "/workspace"
-#  if CMDDIR == "" then set CMDDIR="."
-  CMDDIR: "."
-
-
-build-golang-1.9:
+build:
   stage: build
   tags:
-   - test-ci
+    - test-ci
   script:
-    - export GOPATH=$GOPATH:$WORKSPACE
-    - mkdir -p $WORKSPACE/src/${PREFIX}${NAME}
-    - cd $WORKSPACE/src/${PREFIX}${NAME}
-    - ln -s $CI_PROJECT_DIR .
-    - cd $(basename $CI_PROJECT_DIR)
-    - cd $CMDDIR
-    - go build
+    - go build ./...
 
-test-golang-1.9:
+test:
   stage: test
   tags:
-   - test-ci
+    - test-ci
   script:
-   - export GOPATH=$GOPATH:$WORKSPACE
-   - mkdir -p $WORKSPACE/src/${PREFIX}${NAME}
-   - cd $WORKSPACE/src/${PREFIX}${NAME}
-   - ln -s $CI_PROJECT_DIR .
-   - cd $(basename $CI_PROJECT_DIR)
-   - go test -v -cover
+    - go vet ./...
+    - go test -v -cover ./...
+    - GOMAXPROCS=4 go test -race -timeout 120s ./...
 
-
-bench-golang-1.9:
+bench:
   stage: bench
   tags:
-   - test-ci
+    - test-ci
   script:
-   - export GOPATH=$GOPATH:$WORKSPACE
-   - mkdir -p $WORKSPACE/src/${PREFIX}${NAME}
-   - cd $WORKSPACE/src/${PREFIX}${NAME}
-   - ln -s $CI_PROJECT_DIR .
-   - cd $(basename $CI_PROJECT_DIR)
-   - go test -bench .
-
+    - go test -benchmem -bench=. -run='^$' ./...
 
 test-golang-latest:
   image: golang:latest
   stage: test
   tags:
-   - test-ci
+    - test-ci
   script:
-   - export GOPATH=$GOPATH:$WORKSPACE
-   - mkdir -p $WORKSPACE/src/${PREFIX}${NAME}
-   - cd $WORKSPACE/src/${PREFIX}${NAME}
-   - ln -s $CI_PROJECT_DIR .
-   - cd $(basename $CI_PROJECT_DIR)
-   - go version
-   - go test -v -cover
+    - go version
+    - go test -v -cover ./...

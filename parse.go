@@ -11,8 +11,8 @@ import (
 
 	"time"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/patrickmn/go-cache"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -36,7 +36,7 @@ type GaugeData struct {
 // Packet - meter definition, read from statsd format
 type Packet struct {
 	Bucket   string
-	Value    interface{}
+	Value    any
 	Modifier string
 	Sampling float32
 }
@@ -179,13 +179,9 @@ func parseLine(line []byte) *Packet {
 
 	Stat.PacketCacheMiss()
 
-	logCtx := log.WithFields(log.Fields{
-		"in": "parseLine",
-	})
-
 	split := bytes.SplitN(line, []byte{'|'}, 3)
 	if len(split) < 2 {
-		logCtx.Errorf("Failed to parse line: %s", string(line))
+		log.WithField("in", "parseLine").Errorf("Failed to parse line: %s", string(line))
 		Stat.PointsParseFailInc()
 		return nil
 	}
@@ -199,7 +195,7 @@ func parseLine(line []byte) *Packet {
 		if len(split) == 3 && len(split[2]) > 0 && split[2][0] == '@' {
 			f64, err := strconv.ParseFloat(string(split[2][1:]), 32)
 			if err != nil {
-				logCtx.Errorf("Failed to ParseFloat %s (%s) in line '%s'", string(split[2][1:]), err, line)
+				log.WithField("in", "parseLine").Errorf("Failed to ParseFloat %s (%s) in line '%s'", string(split[2][1:]), err, line)
 				Stat.PointsParseFailInc()
 				return nil
 			}
@@ -209,7 +205,7 @@ func parseLine(line []byte) *Packet {
 
 	split = bytes.SplitN(keyval, []byte{':'}, 2)
 	if len(split) < 2 {
-		logCtx.Errorf("Failed to parse line: '%s'", line)
+		log.WithField("in", "parseLine").Errorf("Failed to parse line: '%s'", line)
 		Stat.PointsParseFailInc()
 		return nil
 	}
@@ -217,14 +213,14 @@ func parseLine(line []byte) *Packet {
 	name := string(split[0])
 	val := split[1]
 	if len(val) == 0 {
-		logCtx.Errorf("Failed to parse line: '%s'", line)
+		log.WithField("in", "parseLine").Errorf("Failed to parse line: '%s'", line)
 		Stat.PointsParseFailInc()
 		return nil
 	}
 
 	var (
 		err         error
-		value       interface{}
+		value       any
 		bucket      string
 		cleanBucket string
 	)
@@ -233,7 +229,7 @@ func parseLine(line []byte) *Packet {
 	case "c":
 		value, err = strconv.ParseInt(string(val), 10, 64)
 		if err != nil {
-			logCtx.Errorf("Failed to ParseInt %s - %s, raw bucket: %s, line: `%s`", string(val), err, name, line)
+			log.WithField("in", "parseLine").Errorf("Failed to ParseInt %s - %s, raw bucket: %s, line: `%s`", string(val), err, name, line)
 			Stat.PointsParseFailInc()
 			return nil
 		}
@@ -258,7 +254,7 @@ func parseLine(line []byte) *Packet {
 
 		value, err = strconv.ParseFloat(s, 64)
 		if err != nil {
-			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
+			log.WithField("in", "parseLine").Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
 			Stat.PointsParseFailInc()
 			return nil
 		}
@@ -269,14 +265,14 @@ func parseLine(line []byte) *Packet {
 	case "ms":
 		value, err = strconv.ParseFloat(string(val), 64)
 		if err != nil {
-			logCtx.Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
+			log.WithField("in", "parseLine").Errorf("Failed to ParseFloat %s - %s, raw bucket: %s, line: '%s'", string(val), err, name, line)
 			Stat.PointsParseFailInc()
 			return nil
 		}
 	case "kv":
 		value = string(val) // Key/value should not need transformation
 	default:
-		logCtx.Errorf("Unrecognized type code %q, raw bucket: %s, line: '%s'", typeCode, name, line)
+		log.WithField("in", "parseLine").Errorf("Unrecognized type code %q, raw bucket: %s, line: '%s'", typeCode, name, line)
 		Stat.PointsParseFailInc()
 		return nil
 	}
@@ -301,7 +297,7 @@ func parseLine(line []byte) *Packet {
 		tagsFromBucketName := make(map[string]string)
 		cleanBucket, tagsFromBucketName, err = parseBucketAndTags(string(name))
 		if err != nil {
-			logCtx.Errorf("Problem parsing %s: %v\n", string(name), err)
+			log.WithField("in", "parseLine").Errorf("Problem parsing %s: %v\n", string(name), err)
 			Stat.PointsParseFailInc()
 			return nil
 		}
@@ -373,5 +369,5 @@ func removeEmptyLines(lines []string) []string {
 
 func fixNewLine(s string) string {
 
-	return strings.Replace(s, "\n", "\\n", -1)
+	return strings.ReplaceAll(s, "\n", "\\n")
 }

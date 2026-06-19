@@ -21,7 +21,7 @@ func (a *Percentiles) Set(s string) error {
 	if err != nil {
 		return err
 	}
-	*a = append(*a, Percentile{f, strings.Replace(s, ".", "_", -1)})
+	*a = append(*a, Percentile{f, strings.ReplaceAll(s, ".", "_")})
 	return nil
 }
 func (p *Percentile) String() string {

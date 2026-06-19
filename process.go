@@ -3,8 +3,8 @@ package main
 import (
 	"bytes"
 	"fmt"
-	log "github.com/Sirupsen/logrus"
-	"github.com/boltdb/bolt"
+	log "github.com/sirupsen/logrus"
+	bolt "go.etcd.io/bbolt"
 	"math"
 	"sort"
 	"strconv"
@@ -62,7 +62,7 @@ func packetHandler(s *Packet) {
 
 }
 
-func formatMetricOutput(bucket string, value interface{}, now int64, backend string) string {
+func formatMetricOutput(bucket string, value any, now int64, backend string) string {
 
 	var ret, val string
 	logCtx := log.WithFields(log.Fields{
