@@ -55,57 +55,18 @@ func submit(deadline time.Time, backend string) error {
 	}
 
 	// send stats to backend
-	switch backend {
-	case "external":
-		if Config.PostFlushCmd != "stdout" {
-			err := sendDataExtCmd(Config.ParsedPostFlushCmd, &buffer)
-			if err != nil {
-				logCtx.Errorf("%s", err)
-				Stat.BatchesTransmitFailInc()
-			} else {
-				Stat.BatchesTransmittedInc()
-			}
-		} else {
-			if err := sendDataStdout(&buffer); err != nil {
-				logCtx.Errorf("%s", err)
-				Stat.BatchesTransmitFailInc()
-			} else {
-				Stat.BatchesTransmittedInc()
-			}
-		}
-
-	case "graphite":
-		err := graphite(Config, deadline, &buffer)
-		if err != nil {
+	b, err := selectBackend(Config)
+	if err != nil {
+		fmt.Printf("%s. Exiting...\n", err)
+		logCtx.Fatalf("%s. Exiting...", err)
+	}
+	if b != nil { // nil == dummy backend (no-op)
+		if err := b.Send(&buffer, deadline); err != nil {
 			logCtx.Errorf("%s", err)
 			Stat.BatchesTransmitFailInc()
 		} else {
 			Stat.BatchesTransmittedInc()
 		}
-
-	case "opentsdb":
-		err := openTSDB(Config, &buffer)
-		if err != nil {
-			logCtx.Errorf("%s", err)
-			Stat.BatchesTransmitFailInc()
-		} else {
-			Stat.BatchesTransmittedInc()
-		}
-
-	case "file":
-		if err := sendDataToFile(Config.CfgFileBackend.LogFile, &buffer); err != nil {
-			logCtx.Errorf("%s", err)
-			Stat.BatchesTransmitFailInc()
-		} else {
-			Stat.BatchesTransmittedInc()
-		}
-
-	case "dummy":
-	//	do nothing
-
-	default:
-		fmt.Printf("Invalid backend `%s`. Exiting...\n", backend)
-		logCtx.Fatalf("Invalid backend `%s`. Exiting...\n", backend)
 	}
 
 	return nil
